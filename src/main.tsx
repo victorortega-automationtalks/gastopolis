@@ -6,8 +6,10 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import { requestPersistentStorage } from './platform'
+import { registerPWA } from './platform/pwa'
 
 void requestPersistentStorage()
+void registerPWA()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
