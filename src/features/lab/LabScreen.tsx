@@ -137,7 +137,7 @@ export function LabScreen() {
               En {assumptions.years} {assumptions.years === 1 ? 'año' : 'años'} tendrías
             </div>
             <div className="num mt-1 text-4xl font-semibold tracking-tight sm:text-5xl">{money(end)}</div>
-            <div className={clsx('mt-1 text-sm', end - endBase >= 0 ? 'text-income' : 'text-expense')}>
+            <div className={clsx('mt-1 text-sm', !levers.length ? 'text-ink-muted' : end - endBase >= 0 ? 'text-income' : 'text-expense')}>
               {levers.length
                 ? `${money(end - endBase, true)} frente a seguir igual (${money(endBase)})`
                 : 'Siguiendo como hasta ahora. Añade palancas para probar cambios.'}

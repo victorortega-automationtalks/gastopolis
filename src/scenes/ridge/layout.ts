@@ -68,6 +68,8 @@ export interface RidgeOptions {
   steps?: number
 }
 
+const MIN_WIDTH = 30
+
 /** Coloca una cresta por categoría: x = mes, altura = importe, z = categoría. Las que sobran se pliegan en «Otras». */
 export function layoutRidge(
   data: { months: string[]; rows: CategorySeries[]; max: number },
@@ -88,6 +90,8 @@ export function layoutRidge(
   }
   const max = Math.max(1e-9, ...rows.flatMap((r) => r.values))
   const n = rows.length
+  // Con pocos meses, los meses se separan más: una cordillera de 2 meses no puede ser una aguja.
+  if (data.months.length > 1) spacingX = Math.max(spacingX, MIN_WIDTH / (data.months.length - 1))
   const width = Math.max(1, data.months.length - 1) * spacingX
   return {
     months: data.months,

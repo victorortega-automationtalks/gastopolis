@@ -32,5 +32,13 @@ describe('Horizonte', () => {
     expect(yate.z).toBeCloseTo(-layout.length)
     // Las metas no cambian la escala: manda la cinta más alta.
     expect(layout.scaleY).toBeCloseTo(layout.maxH / 60000)
+    expect(layout.zeroY).toBe(0)
+  })
+
+  it('con números rojos, el cero sube y la cinta baja por debajo de él (sin hundirse bajo el suelo)', () => {
+    const l = layoutHorizon([{ id: 'esc', label: 'Tal cual', color: '#0ff', values: Array.from({ length: 61 }, (_, m) => -m * 100) }], [])
+    expect(l.zeroY).toBeCloseTo(l.maxH)
+    expect(l.series[0].points[0][1]).toBeCloseTo(l.maxH)
+    expect(l.series[0].points[60][1]).toBeCloseTo(0)
   })
 })

@@ -59,7 +59,7 @@ function curtainMaterial(color: string): THREE.ShaderMaterial {
   })
 }
 
-function Ribbon({ s, main, animKey }: { s: HorizonSeries; main: boolean; animKey: string }) {
+function Ribbon({ s, main, animKey, zeroY }: { s: HorizonSeries; main: boolean; animKey: string; zeroY: number }) {
   const band = useRef<THREE.Mesh>(null)
   const curtain = useRef<THREE.Mesh>(null)
   const start = useRef(-1)
@@ -71,7 +71,8 @@ function Ribbon({ s, main, animKey }: { s: HorizonSeries; main: boolean; animKey
     const curtH: number[] = []
     for (const [x, y, z] of s.points) {
       bandPos.push(x - RIBBON_W / 2, y, z, x + RIBBON_W / 2, y, z)
-      curtPos.push(x, y, z, x, 0, z)
+      // La cortina va de la cinta al nivel del cero (por encima o por debajo).
+      curtPos.push(x, y, z, x, zeroY, z)
       curtH.push(1, 0)
     }
     const idx: number[] = []
@@ -88,7 +89,7 @@ function Ribbon({ s, main, animKey }: { s: HorizonSeries; main: boolean; animKey
     curtainGeo.setAttribute('aH', new THREE.Float32BufferAttribute(curtH, 1))
     curtainGeo.setIndex(idx)
     return { bandGeo, curtainGeo }
-  }, [s.points, n])
+  }, [s.points, n, zeroY])
   const curtainMat = useMemo(() => curtainMaterial(s.color), [s.color])
   const glow = useMemo(() => new THREE.Color(s.color).multiplyScalar(main ? 2.4 : 1.4), [s.color, main])
   const edge = useMemo(() => s.points.map(([x, y, z]) => new THREE.Vector3(x, y + 0.06, z)), [s.points])
@@ -181,6 +182,13 @@ function Floor({ layout, dark, high }: { layout: HorizonLayout; dark: boolean; h
           <meshStandardMaterial color={a.ground} roughness={1} />
         )}
       </mesh>
+      {layout.zeroY > 0.01 && (
+        // Nivel del cero: lo que queda por debajo son números rojos.
+        <mesh rotation-x={-Math.PI / 2} position={[0, layout.zeroY, -layout.length / 2]} raycast={noRaycast}>
+          <planeGeometry args={[layout.width + 10, layout.length]} />
+          <meshBasicMaterial color={dark ? '#fb7185' : '#e11d48'} transparent opacity={0.06} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+      )}
       {layout.years.map((y) => (
         <mesh key={y.month} position={[0, 0.01, y.z]} raycast={noRaycast}>
           <boxGeometry args={[layout.width + 10, 0.01, 0.12]} />
@@ -270,7 +278,7 @@ export function HorizonCanvas(props: HorizonCanvasProps) {
         <directionalLight position={[30, 60, 40]} intensity={colors.dark ? 1.4 : 2} />
         <Floor layout={layout} dark={colors.dark} high={high} />
         {layout.series.map((s, i) => (
-          <Ribbon key={`${s.id}:${s.points.length}`} s={s} main={i === 0} animKey={animKey} />
+          <Ribbon key={`${s.id}:${s.points.length}`} s={s} main={i === 0} animKey={animKey} zeroY={layout.zeroY} />
         ))}
         {layout.gates.map((g) => (
           <Gate key={g.id} g={g} width={layout.width} dark={colors.dark} />

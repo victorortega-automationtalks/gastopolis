@@ -16,6 +16,8 @@
 - Cámara: usar `fitToSphere`, **no `fitToBox`** (camera-controls redondea los ángulos a la cara de la caja y la vista queda de frente). La niebla se ajusta a la distancia de la cámara (`FogRig`).
 - `ShaderMaterial` propios: terminar el fragment con `#include <colorspace_fragment>` o sus colores no casarán con los de los materiales estándar (ni con la niebla).
 - El decorado de la Ciudad (`scenes/city/decor.ts`) es determinista y no recibe clics (`raycast` nulo); sus colores de ambiente viven en `scenes/city/ambient.ts`, no en la paleta de datos.
+- Reproducción temporal: `ui/TimePlayer` + `ui/useTimeline` y fotogramas de `model/timeline.ts`; no hagas otro deslizador. La escena recibe el estado del fotograma (crecimiento, cursor, tramo) y anima hacia él.
+- Laboratorio: la fecha de cada objetivo sale de un único cálculo (`goalRows` → `goalSooner`) que usan la lista, los pórticos del Horizonte y el gráfico 2D. No calcules «cuándo llega» de otra forma en otra vista.
 - Paleta de categorías: `CATEGORY_PALETTE` en `lib/color.ts`, validada con el script del skill dataviz. Si se cambia, revalidar en modo oscuro (#06070c) y claro (#ffffff) y no reordenar a ojo.
 - Formato: `npm run format` (Prettier, sin punto y coma, comillas simples, 160 columnas).
 - **Privacidad por construcción:** la app no se conecta a nada. No añadas peticiones de red, analítica, fuentes o scripts de CDN, ni plugins de Tauri de red/actualizador. La CSP vive en `vite.config.ts` y en `src-tauri/tauri.conf.json`: si cambias una, cambia la otra.

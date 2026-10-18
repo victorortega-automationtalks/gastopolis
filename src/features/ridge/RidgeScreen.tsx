@@ -134,6 +134,7 @@ export function RidgeScreen() {
               className={clsx('glass', evolving && 'ring-1 ring-accent-2/60')}
               onClick={evolving ? stopEvolution : startEvolution}
               title="Ver cómo se levanta la cordillera con el tiempo"
+              aria-label="Evolución"
             >
               <Play size={15} /> <span className="hidden sm:inline">Evolución</span>
             </Button>

@@ -91,6 +91,12 @@ export interface LayoutOptions {
   heightBy: HeightBy
   colorBy: ColorBy
   size?: number
+  /**
+   * Dentro de una categoría: cada edificio con su propio color también dentro de los distritos (los conceptos se
+   * distinguen entre sí; el distrito conserva el color de la subcategoría en su plataforma). En la vista general,
+   * no: cada barrio es de su color para reconocer las categorías.
+   */
+  distinctInside?: boolean
 }
 
 interface Wrap {
@@ -111,7 +117,7 @@ function wrap(node: CityNode, depth: number): Wrap {
  * Treemap de dos niveles: los hijos del nodo visible son distritos (con calles entre ellos) y sus hijos,
  * edificios. Superficie = importe; altura según `heightBy`.
  */
-export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 100 }: LayoutOptions): CityLayout {
+export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 100, distinctInside = false }: LayoutOptions): CityLayout {
   const tree = hierarchy<Wrap>(wrap(view, depth), (w) => w.children).sum((w) => (w.children ? 0 : Math.max(w.node.value, 1e-6)))
   // Calles con sitio para dos carriles (los coches del decorado) y acera en cada distrito.
   const street = size * 0.024
@@ -156,7 +162,7 @@ export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 10
     const color =
       colorBy === 'heat'
         ? heatColor(Math.sqrt(node.value / maxValue))
-        : district >= 0
+        : district >= 0 && !distinctInside
           ? shade(districts[district].color, k % 3 === 0 ? 0 : k % 3 === 1 ? -0.14 : 0.12)
           : node.color
     const r = rect(l)

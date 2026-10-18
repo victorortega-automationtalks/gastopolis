@@ -168,6 +168,15 @@ describe('colores al entrar en un barrio', () => {
     // Al entrar en Gasolina, los edificios toman esos colores.
     const l = layoutCity(gas, { depth: 1, heightBy: 'value', colorBy: 'category', size: 100 })
     expect(l.buildings.map((b) => b.color)).toEqual(concepts)
+    // Dentro de una categoría con subcategorías, los conceptos de cada distrito también se distinguen.
+    const ocio = root.children!.find((c) => c.categoryId === 'ocio')!
+    const inside = layoutCity(ocio, { depth: 2, heightBy: 'value', colorBy: 'category', size: 100, distinctInside: true })
+    const rest = inside.buildings.filter((b) => b.district >= 0 && inside.districts[b.district].node.categoryId === 'rest')
+    expect(rest.length).toBeGreaterThan(0)
+    const general = layoutCity(root, { depth: 2, heightBy: 'value', colorBy: 'category', size: 100 })
+    const ocioDistrict = general.districts.findIndex((d) => d.node.categoryId === 'ocio')
+    // En la vista general, los edificios de un barrio llevan el color del barrio (con matices).
+    expect(general.buildings.filter((b) => b.district === ocioDistrict).every((b) => b.color !== '#000000')).toBe(true)
   })
 })
 

@@ -47,6 +47,8 @@ export interface HorizonLayout {
   maxH: number
   /** Escala: unidades de escena por euro. */
   scaleY: number
+  /** Altura del cero: si alguna cinta baja de cero, el suelo queda por debajo y se ve hasta dónde baja. */
+  zeroY: number
   /** z de cada cambio de año (mes 12, 24…). */
   years: { month: number; z: number }[]
 }
@@ -64,13 +66,16 @@ export function layoutHorizon(
 ): HorizonLayout {
   const months = Math.max(1, ...seriesIn.map((s) => s.values.length - 1))
   const dz = length / months
-  const peak = Math.max(1, ...seriesIn.flatMap((s) => s.values.map(Math.abs)))
-  const scaleY = maxH / peak
+  const all = seriesIn.flatMap((s) => s.values)
+  const top = Math.max(0, ...all)
+  const bottom = Math.min(0, ...all)
+  // La escala abarca de lo más bajo a lo más alto: con números rojos, el cero sube y la cinta se ve bajar.
+  const scaleY = maxH / Math.max(1, top - bottom)
+  const zeroY = bottom < 0 ? -bottom * scaleY : 0
   const n = seriesIn.length
   const series = seriesIn.map((s, i) => {
     const x = (i - (n - 1) / 2) * laneGap
-    // Por debajo de cero baja, pero sin hundirse más que un tercio de la altura.
-    const points = s.values.map((v, m): [number, number, number] => [x, Math.max(-maxH / 3, v * scaleY), -m * dz])
+    const points = s.values.map((v, m): [number, number, number] => [x, zeroY + v * scaleY, -m * dz])
     return { ...s, x, points }
   })
   const main = series[0]?.points ?? []
@@ -81,5 +86,5 @@ export function layoutHorizon(
     return { ...g, y: Math.max(2, ribbonY + 2.5), z: -m * dz, inside }
   })
   const years = Array.from({ length: Math.floor(months / 12) }, (_, k) => ({ month: (k + 1) * 12, z: -(k + 1) * 12 * dz }))
-  return { series, gates, months, length, width: Math.max(1, n) * laneGap, maxH, scaleY, years }
+  return { series, gates, months, length, width: Math.max(1, n) * laneGap, maxH, scaleY, zeroY, years }
 }

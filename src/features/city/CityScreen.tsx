@@ -45,8 +45,8 @@ export function CityScreen() {
   const trail = useMemo(() => resolvePath(root, city.path), [root, city.path])
   const view = trail[trail.length - 1]
   const layout = useMemo(
-    () => layoutCity(view, { depth: city.depth, heightBy: city.heightBy, colorBy: city.colorBy }),
-    [view, city.depth, city.heightBy, city.colorBy],
+    () => layoutCity(view, { depth: city.depth, heightBy: city.heightBy, colorBy: city.colorBy, distinctInside: trail.length > 1 }),
+    [view, city.depth, city.heightBy, city.colorBy, trail.length],
   )
   // Reproducción en el tiempo: el plano es el de todo el periodo y cada edificio crece con lo gastado hasta la fecha.
   const [evolving, setEvolving] = useState(false)
@@ -153,7 +153,7 @@ export function CityScreen() {
               {fmtMoney(view.value, { currency: settings.currency, locale: settings.locale })}
             </span>
           </nav>
-          <div className="pointer-events-auto ml-auto flex items-center gap-2">
+          <div className="pointer-events-auto ml-auto flex flex-wrap items-center justify-end gap-2">
             <Segmented<Kind>
               value={city.kind}
               onChange={(kind) => city.setPrefs({ kind })}
@@ -166,6 +166,7 @@ export function CityScreen() {
               className={clsx('glass', evolving && 'ring-1 ring-accent-2/60')}
               onClick={evolving ? stopEvolution : startEvolution}
               title="Ver cómo crece la ciudad día a día, semana a semana o mes a mes"
+              aria-label="Evolución"
             >
               <Play size={15} /> <span className="hidden sm:inline">Evolución</span>
             </Button>
