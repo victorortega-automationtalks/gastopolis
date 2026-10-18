@@ -155,3 +155,18 @@ describe('torres', () => {
     for (const b of l.buildings) expect(Math.max(...b.towers.map((t) => t.h))).toBeCloseTo(b.h)
   })
 })
+
+describe('colores al entrar en un barrio', () => {
+  it('los conceptos de una categoría tienen colores distintos; las categorías conservan el suyo', () => {
+    const root = buildHierarchy(movements, categories, ['category', 'concept'], 'Gastos')
+    const gas = root.children!.find((c) => c.categoryId === 'gas')!
+    expect(gas.color).toBe('#ff0000')
+    const concepts = gas.children!.map((c) => c.color)
+    expect(concepts).toHaveLength(2)
+    expect(concepts[0]).toBe('#ff0000')
+    expect(concepts[1]).not.toBe('#ff0000')
+    // Al entrar en Gasolina, los edificios toman esos colores.
+    const l = layoutCity(gas, { depth: 1, heightBy: 'value', colorBy: 'category', size: 100 })
+    expect(l.buildings.map((b) => b.color)).toEqual(concepts)
+  })
+})

@@ -164,6 +164,15 @@ describe('cordillera', () => {
     expect(l.rows[0].z).toBeLessThan(l.rows[1].z)
     expect(Math.max(...l.rows.flatMap((r) => r.heights))).toBeCloseTo(24)
   })
+
+  it('con un solo mes, antepone el anterior a cero para que haya cresta', () => {
+    const one = [{ categoryId: 'a', name: 'A', color: '#000', icon: 'Tag', values: [12], total: 12 }]
+    const l = layoutRidge({ months: ['2026-01'], rows: one, max: 12 })
+    expect(l.months).toEqual(['2025-12', '2026-01'])
+    expect(l.width).toBeGreaterThan(0)
+    expect(l.rows[0].values).toEqual([0, 12])
+    expect(l.rows[0].profile.every(Number.isFinite)).toBe(true)
+  })
 })
 
 describe('balanza', () => {
@@ -190,5 +199,20 @@ describe('balanza', () => {
   it('acumulado suma todos los meses hasta el elegido', () => {
     const acc = balanceSnapshot(ms, cats, months, 1, 'cumulative')
     expect(acc).toMatchObject({ incomeTotal: 3000, expenseTotal: 2500, net: 500, saved: 300 })
+  })
+})
+
+describe('colores de hermanos', () => {
+  it('familyColor: el primero es el del padre y los demás se distinguen bien', async () => {
+    const { familyColor, hexToOklch } = await import('../lib/color')
+    const base = '#3987e5'
+    const colors = Array.from({ length: 12 }, (_, i) => familyColor(base, i))
+    expect(colors[0]).toBe(base)
+    expect(new Set(colors).size).toBe(12)
+    // Vecinos con tonos claramente distintos (más de 40° de diferencia de matiz).
+    for (let i = 1; i < colors.length - 1; i++) {
+      const d = Math.abs(hexToOklch(colors[i])[2] - hexToOklch(colors[i + 1])[2]) % 360
+      expect(Math.min(d, 360 - d)).toBeGreaterThan(40)
+    }
   })
 })

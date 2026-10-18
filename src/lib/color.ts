@@ -75,6 +75,32 @@ export function shade(hex: string, amt: number): string {
   return rgbToHex([r, g, b].map((v) => (v + (t - v) * p) / 255))
 }
 
+/** sRGB hex → OKLCH [L, C, h°]. */
+export function hexToOklch(hex: string): [number, number, number] {
+  const lin = hexToRgb(hex).map((v) => {
+    const c = v / 255
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  const l = Math.cbrt(0.4122214708 * lin[0] + 0.5363325363 * lin[1] + 0.0514459929 * lin[2])
+  const m = Math.cbrt(0.2119034982 * lin[0] + 0.6806995451 * lin[1] + 0.1073969566 * lin[2])
+  const s = Math.cbrt(0.0883024619 * lin[0] + 0.2817188376 * lin[1] + 0.6299787005 * lin[2])
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s
+  const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s
+  const b = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+  return [L, Math.hypot(a, b), ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360]
+}
+
+/**
+ * Colores para los hijos de un mismo bloque (los conceptos de una categoría): el primero es el del padre y los
+ * demás giran el tono por el ángulo áureo, alternando tres luminosidades, para que vecinos se distingan bien.
+ */
+export function familyColor(base: string, i: number): string {
+  if (i === 0) return base
+  const [, , h] = hexToOklch(base)
+  const L = [0.7, 0.6, 0.79][i % 3]
+  return oklchToHex(L, 0.15, (h + i * 137.508) % 360)
+}
+
 /** Rampa secuencial de un solo tono (brasa): 0 apagado → 1 incandescente. Sobre fondo oscuro, más valor = más luz. */
 export function heatColor(t: number): string {
   const x = Math.min(1, Math.max(0, t))

@@ -1,3 +1,4 @@
+import { familyColor } from '../lib/color'
 import { preferredSpelling } from '../lib/text'
 import { fmtMonth } from './format'
 import { monthKey } from './period'
@@ -134,13 +135,34 @@ export function buildHierarchy(movements: Movement[], categories: Category[], di
     })
   }
 
+  // Hermanos que heredaron el mismo color (los conceptos de una categoría) se separan en tonos distintos,
+  // por orden de importe: al entrar en un barrio, cada edificio se distingue del de al lado.
+  const distinguish = (nodes: CityNode[], base: string) => {
+    if (nodes.length < 2 || nodes.some((n) => n.color !== nodes[0].color)) return
+    nodes.forEach((n, i) => (n.color = familyColor(base, i)))
+  }
   const sortDeep = (nodes: CityNode[]) => {
     nodes.sort((a, b) => b.value - a.value)
     for (const n of nodes) if (n.children) sortDeep(n.children)
     return nodes
   }
+  const recolor = (nodes: CityNode[]) => {
+    for (const n of nodes) {
+      if (!n.children) continue
+      distinguish(n.children, n.color)
+      recolor(n.children)
+    }
+    return nodes
+  }
 
-  return { id: 'root', type: 'root', label: rootLabel, color: NEUTRAL, ...stats(movements), children: sortDeep(build(movements, dims, 'root', null, null)) }
+  return {
+    id: 'root',
+    type: 'root',
+    label: rootLabel,
+    color: NEUTRAL,
+    ...stats(movements),
+    children: recolor(sortDeep(build(movements, dims, 'root', null, null))),
+  }
 }
 
 /** Recorre la ruta guardada; si algún tramo ya no existe (cambió el filtro), se queda en el último que sí. */

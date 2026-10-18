@@ -1,4 +1,4 @@
-import type { CategorySeries } from '../../model/series'
+import { addMonths, type CategorySeries } from '../../model/series'
 
 /**
  * Perfil suave que pasa por todos los puntos sin sobrepasarlos (interpolación cúbica monótona de Fritsch–Carlson):
@@ -73,6 +73,10 @@ export function layoutRidge(
   data: { months: string[]; rows: CategorySeries[]; max: number },
   { maxRows = 10, spacingX = 4, spacingZ = 6, maxH = 24, steps = 8 }: RidgeOptions = {},
 ): RidgeLayout {
+  // Con un solo mes no hay cresta que dibujar (ancho cero): se antepone el mes anterior a cero y la cresta sube.
+  if (data.months.length === 1) {
+    data = { ...data, months: [addMonths(data.months[0], -1), data.months[0]], rows: data.rows.map((r) => ({ ...r, values: [0, ...r.values] })) }
+  }
   let rows = data.rows
   if (rows.length > maxRows) {
     const rest = rows.slice(maxRows - 1)

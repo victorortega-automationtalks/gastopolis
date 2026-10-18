@@ -38,7 +38,7 @@ function ridgeGeometry(profile: number[], width: number, depth: number): THREE.E
   const shape = new THREE.Shape()
   const n = profile.length
   shape.moveTo(0, 0)
-  profile.forEach((h, i) => shape.lineTo((i / (n - 1)) * width, Math.max(h, 0.05)))
+  profile.forEach((h, i) => shape.lineTo((i / Math.max(n - 1, 1)) * width, Math.max(h, 0.05)))
   shape.lineTo(width, 0)
   shape.closePath()
   const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.12, bevelSegments: 2, curveSegments: 1 })
@@ -69,7 +69,7 @@ function Ridge({
   const linePoints = useMemo(
     () =>
       row.profile.map(
-        (h, i) => new THREE.Vector3((i / (row.profile.length - 1)) * layout.width - layout.width / 2, Math.max(h, 0.05) + 0.14, depth / 2 + 0.13),
+        (h, i) => new THREE.Vector3((i / Math.max(row.profile.length - 1, 1)) * layout.width - layout.width / 2, Math.max(h, 0.05) + 0.14, depth / 2 + 0.13),
       ),
     [row.profile, layout.width, depth],
   )
