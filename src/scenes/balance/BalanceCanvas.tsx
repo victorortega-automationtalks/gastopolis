@@ -22,7 +22,6 @@ export interface BalanceCanvasProps {
   snapshot: BalanceSnapshot
   /** Mayor platillo de todo el periodo: escala fija para que las alturas se puedan comparar entre meses. */
   scaleMax: number
-  savedMax: number
   hovered: string | null
   quality: ResolvedQuality
   colors: SceneColors
@@ -42,7 +41,6 @@ const HANG = 4
 const PAN_R = 4.4
 const TOWER = 4.6
 const TOWER_MAX = 14
-const JAR_H = 9
 const MAX_TILT = 0.38
 /** Ángulo del brazo: con raíz, para que una diferencia del 10 % ya se note y una enorme no lo tumbe. */
 const tiltAngle = (t: number) => Math.sign(t) * Math.sqrt(Math.abs(t)) * MAX_TILT
@@ -208,39 +206,6 @@ function Scale({ snapshot, scaleMax, hovered, colors, incomeColor, expenseColor,
   )
 }
 
-/** Tarro de cristal delante del pilar: se llena con lo apartado a ahorro e inversión. */
-function Jar({ snapshot, savedMax, colors }: { snapshot: BalanceSnapshot; savedMax: number; colors: SceneColors }) {
-  const anim = useRef({ saved: 0 })
-  const fill = useRef<THREE.Mesh>(null)
-  const gold = ambientFor(colors.dark).bulb
-  useFrame((_, dt) => {
-    const a = anim.current
-    const target = Math.max(0, snapshot.saved) / Math.max(savedMax, 1e-9)
-    a.saved += (target - a.saved) * Math.min(1, dt * 4)
-    if (fill.current) {
-      const h = Math.max(0.001, a.saved * (JAR_H - 0.6))
-      fill.current.scale.y = h
-      fill.current.position.y = 0.6 + h / 2
-    }
-  })
-  return (
-    <group position={[0, 0, 8]}>
-      <mesh position={[0, JAR_H / 2 + 0.3, 0]} raycast={noRaycast}>
-        <cylinderGeometry args={[2.1, 2.1, JAR_H, 48, 1, true]} />
-        <meshPhysicalMaterial color="#ffffff" transparent opacity={0.16} roughness={0.05} metalness={0} side={THREE.DoubleSide} depthWrite={false} />
-      </mesh>
-      <mesh position={[0, 0.3, 0]} raycast={noRaycast}>
-        <cylinderGeometry args={[2.25, 2.25, 0.6, 48]} />
-        <meshStandardMaterial color={colors.dark ? '#2a2e3a' : '#b9bfcc'} metalness={0.7} roughness={0.3} />
-      </mesh>
-      <mesh ref={fill} raycast={noRaycast}>
-        <cylinderGeometry args={[1.9, 1.9, 1, 48]} />
-        <meshStandardMaterial color={gold} emissive={gold} emissiveIntensity={colors.dark ? 0.9 : 0.25} roughness={0.3} transparent opacity={0.85} />
-      </mesh>
-    </group>
-  )
-}
-
 function Stage({ dark, high }: { dark: boolean; high: boolean }) {
   const a = ambientFor(dark)
   return (
@@ -328,16 +293,8 @@ function useSpecs(p: BalanceCanvasProps): LabelSpec[] {
         icon: side === 'income' ? 'HandCoins' : 'Receipt',
       })
     }
-    specs.push({
-      id: 'jar',
-      pos: [0, JAR_H + 1.2, 8],
-      color: ambientFor(p.colors.dark).bulb,
-      icon: 'PiggyBank',
-      title: snapshot.saved >= 0 ? 'Apartado' : 'Retirado de ahorro',
-      value: money(Math.abs(snapshot.saved)),
-    })
     return specs
-  }, [snapshot, scaleMax, hovered, currency, locale, incomeColor, expenseColor, p.colors.dark])
+  }, [snapshot, scaleMax, hovered, currency, locale, incomeColor, expenseColor])
 }
 
 function Rig({ frameKey }: { frameKey: string }) {
@@ -378,7 +335,6 @@ export function BalanceCanvas(props: BalanceCanvasProps) {
 
         <Stage dark={colors.dark} high={high} />
         <Scale {...props} />
-        <Jar snapshot={props.snapshot} savedMax={props.savedMax} colors={colors} />
         <LabelProjector specs={specs} els={els} />
         <Rig frameKey={props.frameKey} />
 

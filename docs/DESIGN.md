@@ -64,7 +64,7 @@ Relieve mes × categoría. Clic en una celda → Ciudad filtrada a ese mes y cat
 ### Balanza (fase 3)
 Torres de ingresos y gastos apiladas por categoría, transferencias en el centro, objetivos como torres de cristal. Deslizador temporal mensual o acumulado.
 
-**Implementación:** balanza física con brazo que se inclina hacia lo que pesa más (raíz de la diferencia relativa, para que un 10 % ya se note), platillos colgados con cadenas y torres apiladas por categoría raíz (más de 7 → «Otras»). Escala fija para todo el periodo, así un mes ligero se ve ligero. Tarro de cristal que se llena con lo apartado. Deslizador con reproducción; arranca en el último mes con ingresos. Clic en una franja → Ciudad de esa categoría y mes.
+**Implementación:** balanza física con brazo que se inclina hacia lo que pesa más (raíz de la diferencia relativa, para que un 10 % ya se note), platillos colgados con cadenas y torres apiladas por categoría raíz (más de 7 → «Otras»). Escala fija para todo el periodo, así un mes ligero se ve ligero. Deslizador con reproducción; arranca en el último mes con ingresos. Clic en una franja → Ciudad de esa categoría y mes.
 
 ### Objetivos (fase 4)
 Metas de ahorro («Entrada vivienda · 40.000 € · dic 2029»): aportación mensual necesaria, fecha estimada según tu tasa de ahorro real, adelantado/atrasado, hitos 25/50/75/100 %. Las transferencias a ahorro se asignan a objetivos por regla o reparto porcentual.

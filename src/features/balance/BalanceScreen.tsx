@@ -47,15 +47,13 @@ export function BalanceScreen() {
   const snapshot = useMemo(() => balanceSnapshot(scoped, categories, months, index, mode), [scoped, categories, months, index, mode])
 
   // Escala fija para todo el periodo: así un mes ligero se ve ligero de verdad al lado de uno pesado.
-  const { scaleMax, savedMax } = useMemo(() => {
-    let scaleMax = 1
-    let savedMax = 1
+  const scaleMax = useMemo(() => {
+    let max = 1
     for (let i = 0; i < months.length; i++) {
       const s = balanceSnapshot(scoped, categories, months, i, mode)
-      scaleMax = Math.max(scaleMax, s.incomeTotal, s.expenseTotal)
-      savedMax = Math.max(savedMax, s.saved)
+      max = Math.max(max, s.incomeTotal, s.expenseTotal)
     }
-    return { scaleMax, savedMax }
+    return max
   }, [scoped, categories, months, mode])
 
   const money = (v: number, signed = false) => fmtMoney(v, { currency: settings.currency, locale: settings.locale, signed })
@@ -71,7 +69,6 @@ export function BalanceScreen() {
               <BalanceCanvas
                 snapshot={snapshot}
                 scaleMax={scaleMax}
-                savedMax={savedMax}
                 hovered={hovered}
                 quality={quality}
                 colors={colors}
