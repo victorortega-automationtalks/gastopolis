@@ -76,12 +76,7 @@ export function defaultTableConfig(t: DetectedTable): TableConfig {
   return { ...t, include: true, signMode: 'auto' }
 }
 
-export function buildPlan(
-  source: SourceFile,
-  tables: TableConfig[],
-  existing: ExistingData,
-  kindOverrides: Record<string, Kind> = {},
-): ImportPlan {
+export function buildPlan(source: SourceFile, tables: TableConfig[], existing: ExistingData, kindOverrides: Record<string, Kind> = {}): ImportPlan {
   const rows: PlannedRow[] = []
   const skipped: SkippedRow[] = []
   const catNames = new Map<string, string[]>()
@@ -168,7 +163,10 @@ function readTable(sheet: SheetGrid, table: TableConfig): { rows: RawRow[]; skip
 
     const rowNumber = r + sheet.rowOffset + 1
     const date = parseDate(at(row, cols.date), sheet.date1904)
-    const preview = [date ?? cells[0], ...cells.slice(1)].filter((v) => v != null && v !== '').map(String).join(' · ')
+    const preview = [date ?? cells[0], ...cells.slice(1)]
+      .filter((v) => v != null && v !== '')
+      .map(String)
+      .join(' · ')
     if (!date) {
       skipped.push({ sheet: sheet.name, rowNumber, reason: 'Fecha vacía o no reconocida', preview })
       continue

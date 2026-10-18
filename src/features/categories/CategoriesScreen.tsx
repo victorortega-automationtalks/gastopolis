@@ -84,7 +84,12 @@ export function CategoriesScreen() {
             void add()
           }}
         >
-          <input className="field h-9 sm:w-56" placeholder={`Nueva categoría de ${KIND_LABEL[kind].toLowerCase()}`} value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <input
+            className="field h-9 sm:w-56"
+            placeholder={`Nueva categoría de ${KIND_LABEL[kind].toLowerCase()}`}
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
           <Button type="submit" variant="primary" disabled={!newName.trim()}>
             <Plus size={15} /> Añadir
           </Button>
@@ -93,7 +98,8 @@ export function CategoriesScreen() {
 
       {kind === 'transfer' && (
         <p className="text-sm text-ink-muted">
-          Las transferencias son dinero que cambia de bolsillo (cuenta de ahorro, cripto, fondos). No cuentan como gasto ni como ingreso, pero sí en la Balanza y en tus objetivos.
+          Las transferencias son dinero que cambia de bolsillo (cuenta de ahorro, cripto, fondos). No cuentan como gasto ni como ingreso, pero sí en la Balanza
+          y en tus objetivos.
         </p>
       )}
 
@@ -176,13 +182,21 @@ function CategoryRow({
                   <button
                     key={s}
                     onClick={() => (onChange({ color: s }), close())}
-                    className={clsx('h-7 w-7 rounded-md ring-offset-2 ring-offset-surface-solid transition hover:scale-110', s === c.color && 'ring-2 ring-white')}
+                    className={clsx(
+                      'h-7 w-7 rounded-md ring-offset-2 ring-offset-surface-solid transition hover:scale-110',
+                      s === c.color && 'ring-2 ring-white',
+                    )}
                     style={{ background: s }}
                     aria-label={s}
                   />
                 ))}
               </div>
-              <input type="color" value={c.color} onChange={(e) => onChange({ color: e.target.value })} className="mt-2 h-8 w-full cursor-pointer rounded bg-transparent" />
+              <input
+                type="color"
+                value={c.color}
+                onChange={(e) => onChange({ color: e.target.value })}
+                className="mt-2 h-8 w-full cursor-pointer rounded bg-transparent"
+              />
             </div>
           )}
         </Popover>
@@ -190,7 +204,12 @@ function CategoryRow({
           {(close) => (
             <div className="grid w-72 grid-cols-8 gap-1">
               {Object.keys(CATEGORY_ICONS).map((n) => (
-                <button key={n} onClick={() => (onChange({ icon: n }), close())} className={clsx('rounded-md p-1.5 hover:bg-surface-2', n === c.icon && 'bg-accent/20 ring-1 ring-accent/50')} title={n}>
+                <button
+                  key={n}
+                  onClick={() => (onChange({ icon: n }), close())}
+                  className={clsx('rounded-md p-1.5 hover:bg-surface-2', n === c.icon && 'bg-accent/20 ring-1 ring-accent/50')}
+                  title={n}
+                >
                   <CategoryIcon name={n} size={18} />
                 </button>
               ))}
@@ -210,8 +229,7 @@ function CategoryRow({
 
       <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
         <span className="w-36 text-right text-xs whitespace-nowrap text-ink-muted">
-          <span className="num">{stats?.count ?? 0}</span> mov. ·{' '}
-          <Money value={stats?.total ?? 0} compact />
+          <span className="num">{stats?.count ?? 0}</span> mov. · <Money value={stats?.total ?? 0} compact />
         </span>
         <span className="hidden w-24 text-right text-xs whitespace-nowrap text-ink-faint lg:inline" title="Media por mes con movimientos">
           {avg ? `${fmtMoney(avg, { currency: settings.currency, locale: settings.locale, compact: true })}/mes` : ''}
@@ -272,12 +290,26 @@ function Popover({ trigger, label, children }: { trigger: ReactNode; label: stri
       <button onClick={() => setOpen(!open)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-2" aria-label={label}>
         {trigger}
       </button>
-      {open && <div className="absolute top-10 left-0 z-40 rounded-xl border border-line-strong bg-surface-solid p-3 shadow-2xl">{children(() => setOpen(false))}</div>}
+      {open && (
+        <div className="absolute top-10 left-0 z-40 rounded-xl border border-line-strong bg-surface-solid p-3 shadow-2xl">{children(() => setOpen(false))}</div>
+      )}
     </div>
   )
 }
 
-function DeleteDialog({ category, all, count, onClose, onConfirm }: { category: Category; all: Category[]; count: number; onClose: () => void; onConfirm: (target: string | null) => void }) {
+function DeleteDialog({
+  category,
+  all,
+  count,
+  onClose,
+  onConfirm,
+}: {
+  category: Category
+  all: Category[]
+  count: number
+  onClose: () => void
+  onConfirm: (target: string | null) => void
+}) {
   const options = all.filter((c) => c.id !== category.id)
   const sameKind = options.filter((c) => c.kind === category.kind)
   const [target, setTarget] = useState(sameKind[0]?.id ?? options[0]?.id ?? '')

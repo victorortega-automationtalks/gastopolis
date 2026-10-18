@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { useSettings } from './data/hooks'
 import { CategoriesScreen } from './features/categories/CategoriesScreen'
 import { ImportWizard } from './features/import/ImportWizard'
@@ -10,6 +10,17 @@ import { useUI, type Route } from './store/ui'
 import { AppShell } from './ui/AppShell'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import { CURRENT_PHASE, navItem } from './ui/nav'
+
+// Las escenas (three.js, recharts) van en su propio chunk: la primera carga solo trae lo básico.
+const CityScreen = lazy(() => import('./features/city/CityScreen').then((m) => ({ default: m.CityScreen })))
+
+function Loading() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="h-10 w-10 animate-spin rounded-full border-2 border-line-strong border-t-accent-2" />
+    </div>
+  )
+}
 
 function useTheme() {
   const { theme } = useSettings()
@@ -29,6 +40,12 @@ function useTheme() {
 
 function Screen({ route }: { route: Route }) {
   switch (route) {
+    case 'ciudad':
+      return (
+        <Suspense fallback={<Loading />}>
+          <CityScreen />
+        </Suspense>
+      )
     case 'movimientos':
       return <MovementsScreen />
     case 'categorias':

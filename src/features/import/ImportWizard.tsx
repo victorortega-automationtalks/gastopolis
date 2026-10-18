@@ -78,7 +78,8 @@ export function ImportWizard() {
       <span className="mr-auto text-xs text-ink-muted">
         {plan && (
           <>
-            <b className="text-ink">{fresh}</b> nuevos · {plan.stats.duplicates} ya estaban · {plan.stats.skipped} saltados · {plan.stats.newCategories} categorías nuevas
+            <b className="text-ink">{fresh}</b> nuevos · {plan.stats.duplicates} ya estaban · {plan.stats.skipped} saltados · {plan.stats.newCategories}{' '}
+            categorías nuevas
           </>
         )}
       </span>
@@ -178,7 +179,17 @@ function DropZone({ onFile, busy }: { onFile: (f: File) => void; busy: boolean }
   )
 }
 
-function TableCard({ source, table, plan, onChange }: { source: SourceFile; table: TableConfig; plan: ImportPlan | null; onChange: (p: Partial<TableConfig>) => void }) {
+function TableCard({
+  source,
+  table,
+  plan,
+  onChange,
+}: {
+  source: SourceFile
+  table: TableConfig
+  plan: ImportPlan | null
+  onChange: (p: Partial<TableConfig>) => void
+}) {
   const sheet = source.sheets.find((s) => s.name === table.sheet)!
   const options = headerOptions(sheet, table)
   const rows = plan?.rows.filter((r) => r.tableId === table.id) ?? []
@@ -258,20 +269,33 @@ function TableCard({ source, table, plan, onChange }: { source: SourceFile; tabl
   )
 }
 
-function CategoriesReview({ plan, overrides, setOverrides }: { plan: ImportPlan; overrides: Record<string, Kind>; setOverrides: (o: Record<string, Kind>) => void }) {
+function CategoriesReview({
+  plan,
+  overrides,
+  setOverrides,
+}: {
+  plan: ImportPlan
+  overrides: Record<string, Kind>
+  setOverrides: (o: Record<string, Kind>) => void
+}) {
   const cats = plan.categories.filter((c) => c.count > 0)
   return (
     <section className="rounded-xl border border-line-strong bg-surface p-4">
       <h3 className="font-display font-semibold">Categorías</h3>
       <p className="mt-1 text-xs text-ink-muted">
-        Revisa el tipo. Lo que es mover dinero entre tus bolsillos (ahorro, cripto, inversión) es <b className="text-transfer">transferencia</b>: no cuenta como gasto ni como ingreso.
+        Revisa el tipo. Lo que es mover dinero entre tus bolsillos (ahorro, cripto, inversión) es <b className="text-transfer">transferencia</b>: no cuenta como
+        gasto ni como ingreso.
       </p>
       <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
         {cats.map((c) => (
           <div key={c.sourceKey} className="flex items-center gap-2 border-t border-line py-2 text-sm">
             <span className="min-w-0 flex-1 truncate">
               {c.name}
-              {c.existingId ? <span className="ml-2 text-[10px] text-ink-faint">existente</span> : <span className="ml-2 text-[10px] text-accent-2">nueva</span>}
+              {c.existingId ? (
+                <span className="ml-2 text-[10px] text-ink-faint">existente</span>
+              ) : (
+                <span className="ml-2 text-[10px] text-accent-2">nueva</span>
+              )}
             </span>
             <span className="num text-xs text-ink-faint">{c.count}</span>
             <Money value={c.total} kind="auto" className="w-24 text-right text-xs" />

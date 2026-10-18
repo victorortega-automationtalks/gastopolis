@@ -146,7 +146,10 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
               type="button"
               key={c.id}
               onClick={() => setPickedCategory(c.id)}
-              className={clsx('flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition', c.id === categoryId ? 'text-ink' : 'border-line text-ink-muted hover:text-ink')}
+              className={clsx(
+                'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition',
+                c.id === categoryId ? 'text-ink' : 'border-line text-ink-muted hover:text-ink',
+              )}
               style={c.id === categoryId ? { borderColor: c.color, background: c.color + '26' } : undefined}
             >
               <CategoryIcon name={c.icon} size={13} className="shrink-0" />
@@ -155,7 +158,9 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
           ))}
         </div>
       </Field>
-      {kind === 'transfer' && <p className="text-xs text-ink-muted">En transferencias, un importe negativo aparta dinero (a ahorro o inversión) y uno positivo lo trae de vuelta.</p>}
+      {kind === 'transfer' && (
+        <p className="text-xs text-ink-muted">En transferencias, un importe negativo aparta dinero (a ahorro o inversión) y uno positivo lo trae de vuelta.</p>
+      )}
       <Field label="Notas">
         <textarea className="field min-h-16" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>

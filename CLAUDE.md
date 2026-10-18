@@ -11,6 +11,9 @@
 - **El tipo pertenece a la categoría.** Si cambias la categoría de un movimiento, usa `recategorize()`/`updateMovement()` del repositorio, que ajustan `kind` y signo.
 - Toda escritura en IndexedDB pasa por `src/data/repo.ts`. Toda lectura en vivo, por `src/data/queries.ts` (tienen test que valida los índices de Dexie: un `orderBy` sobre un campo sin índice rompe la app entera).
 - Colores siempre con tokens (`text-ink`, `bg-surface`, `text-expense`…), nunca hex sueltos en componentes. Los colores de categoría usan `.chip-ink` + `--c` para que se lean en tema claro.
+- Escenas 3D: lógica de layout pura en `scenes/<escena>/layout.ts` con tests; el lienzo solo pinta. Instancias con `InstancedMesh` y `key` por número de instancias. **No usar `drei/Html`** para rótulos (crea raíces React y rompe al desmontar): usar la capa DOM proyectada de `CityCanvas`. Pantallas con three.js/recharts se cargan con `lazy()`.
+- Paleta de categorías: `CATEGORY_PALETTE` en `lib/color.ts`, validada con el script del skill dataviz. Si se cambia, revalidar en modo oscuro (#06070c) y claro (#ffffff) y no reordenar a ojo.
+- Formato: `npm run format` (Prettier, sin punto y coma, comillas simples, 160 columnas).
 - Los datos reales de usuarios **no** se suben al repo. Los tests usan fixtures sintéticos que imitan su estructura.
 
 ## Probar en navegador

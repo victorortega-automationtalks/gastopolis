@@ -56,7 +56,7 @@ function mulberry32(seed: number) {
 export function buildSample(now = new Date()): { categories: Category[]; movements: Movement[] } {
   const rnd = mulberry32(20250703)
   const between = (a: number, b: number) => Math.round((a + rnd() * (b - a)) * 100) / 100
-  const pick = <T,>(xs: T[]) => xs[Math.floor(rnd() * xs.length)]
+  const pick = <T>(xs: T[]) => xs[Math.floor(rnd() * xs.length)]
 
   const categories: Category[] = CATS.map(([id, name, kind, icon, parent, budget], i) => ({
     id: `sample-${id}`,
@@ -104,7 +104,8 @@ export function buildSample(now = new Date()): { categories: Category[]; movemen
     // Ingresos
     add(day(28), 'nomina', 'Nómina Acme S.L.', mi < 10 ? 1850 : 1920)
     if (monthIndex === 5 || monthIndex === 11) add(day(20), 'extra', 'Paga extra', 1850)
-    if (rnd() < 0.25) add(day(Math.ceil(rnd() * 27)), 'ventas', pick(['Wallapop: bici', 'Wallapop: monitor', 'Vinted: chaqueta', 'Wallapop: consola']), between(20, 140))
+    if (rnd() < 0.25)
+      add(day(Math.ceil(rnd() * 27)), 'ventas', pick(['Wallapop: bici', 'Wallapop: monitor', 'Vinted: chaqueta', 'Wallapop: consola']), between(20, 140))
 
     // Fijos
     add(day(1), 'alquiler', 'Alquiler piso', 690)
@@ -124,16 +125,20 @@ export function buildSample(now = new Date()): { categories: Category[]; movemen
     if (mi === 13) add(day(10), 'ahorro', 'Retiro ahorro (viaje)', 600)
 
     // Variables
-    for (let w = 0; w < 4; w++) add(day(3 + w * 7 + Math.floor(rnd() * 3)), 'super', pick(['Mercadona', 'Mercadona', 'Lidl', 'Carrefour', 'Alcampo']), between(28, 96))
+    for (let w = 0; w < 4; w++)
+      add(day(3 + w * 7 + Math.floor(rnd() * 3)), 'super', pick(['Mercadona', 'Mercadona', 'Lidl', 'Carrefour', 'Alcampo']), between(28, 96))
     for (let k = 0; k < 3; k++) add(day(2 + k * 10 + Math.floor(rnd() * 5)), 'gasolina', pick(['Repsol', 'Cepsa', 'Galp']), between(45, 72))
     const cafes = 6 + Math.floor(rnd() * 10)
-    for (let k = 0; k < cafes; k++) add(day(1 + Math.floor(rnd() * 28)), 'cafe', pick(['Café bar Luna', 'Starbucks', 'Máquina vending', 'Panadería']), between(1.3, 4.8))
+    for (let k = 0; k < cafes; k++)
+      add(day(1 + Math.floor(rnd() * 28)), 'cafe', pick(['Café bar Luna', 'Starbucks', 'Máquina vending', 'Panadería']), between(1.3, 4.8))
     const dinners = 2 + Math.floor(rnd() * 4)
-    for (let k = 0; k < dinners; k++) add(day(1 + Math.floor(rnd() * 28)), 'restaurantes', pick(['Casa Julián', 'Sushi Kyoto', 'La Tagliatella', 'Burger', 'Tapas El Rincón']), between(14, 58))
+    for (let k = 0; k < dinners; k++)
+      add(day(1 + Math.floor(rnd() * 28)), 'restaurantes', pick(['Casa Julián', 'Sushi Kyoto', 'La Tagliatella', 'Burger', 'Tapas El Rincón']), between(14, 58))
     if (rnd() < 0.6) add(day(1 + Math.floor(rnd() * 28)), 'ropa', pick(['Zara', 'Decathlon', 'Pull&Bear', 'Zapatillas running']), between(19, 110))
     if (rnd() < 0.5) add(day(1 + Math.floor(rnd() * 28)), 'videojuegos', pick(['Steam', 'PlayStation Store', 'Clash of Clans']), between(3.99, 59.99))
     if (rnd() < 0.3) add(day(1 + Math.floor(rnd() * 28)), 'farmacia', 'Farmacia', between(6, 32))
-    if (rnd() < 0.2) add(day(1 + Math.floor(rnd() * 28)), 'electronica', pick(['MediaMarkt: auriculares', 'Amazon: SSD', 'PcComponentes: teclado']), between(35, 160))
+    if (rnd() < 0.2)
+      add(day(1 + Math.floor(rnd() * 28)), 'electronica', pick(['MediaMarkt: auriculares', 'Amazon: SSD', 'PcComponentes: teclado']), between(35, 160))
     if (monthIndex === 11) {
       add(day(18), 'regalos', 'Regalos Navidad', between(140, 260))
       add(day(22), 'regalos', 'Amigo invisible', 25)

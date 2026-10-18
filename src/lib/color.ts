@@ -36,21 +36,47 @@ function rgbToHex(rgb: number[]): string {
 }
 
 /**
- * Color n-ésimo de la paleta de categorías: ángulo áureo en el tono y dos niveles de luminosidad
- * alternos, así categorías consecutivas nunca se parecen.
+ * Paleta categórica validada (skill dataviz, validate_palette.js) sobre el fondo oscuro #06070c y sobre blanco:
+ * banda de luminosidad, croma, separación con daltonismo entre vecinos ≥ 8,4 y contraste ≥ 3:1.
+ * El orden es parte de la validación: no reordenar.
+ */
+export const CATEGORY_PALETTE = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
+
+/**
+ * Color de la n-ésima categoría. Pasadas las 8 primeras se repiten los tonos en variante clara y luego oscura;
+ * a partir de ahí la identidad la llevan las etiquetas (chips, rótulos de distrito), no solo el color.
  */
 export function paletteColor(i: number): string {
-  const hue = (285 + i * 137.508) % 360
-  const light = i % 2 === 0 ? 0.76 : 0.68
-  return oklchToHex(light, 0.17, hue)
+  const base = CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]
+  const round = Math.floor(i / CATEGORY_PALETTE.length) % 3
+  return round === 0 ? base : shade(base, round === 1 ? 0.3 : -0.3)
 }
 
-/** Muestras para el selector de color. */
-export const SWATCHES: string[] = Array.from({ length: 24 }, (_, i) => oklchToHex(i < 12 ? 0.76 : 0.64, 0.17, (i % 12) * 30 + 15))
+/** Muestras para el selector de color: la paleta validada y sus variantes. */
+export const SWATCHES: string[] = Array.from({ length: 24 }, (_, i) => paletteColor(i))
 
 export function withAlpha(hex: string, alpha: number): string {
   const a = Math.round(Math.min(1, Math.max(0, alpha)) * 255)
     .toString(16)
     .padStart(2, '0')
   return hex.length === 7 ? hex + a : hex
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1, 7), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+/** Aclara (amt > 0) u oscurece (amt < 0) mezclando con blanco o negro. */
+export function shade(hex: string, amt: number): string {
+  const [r, g, b] = hexToRgb(hex)
+  const t = amt < 0 ? 0 : 255
+  const p = Math.abs(amt)
+  return rgbToHex([r, g, b].map((v) => (v + (t - v) * p) / 255))
+}
+
+/** Rampa secuencial de un solo tono (brasa): 0 apagado → 1 incandescente. Sobre fondo oscuro, más valor = más luz. */
+export function heatColor(t: number): string {
+  const x = Math.min(1, Math.max(0, t))
+  return oklchToHex(0.36 + 0.46 * x, 0.07 + 0.12 * x, 38)
 }

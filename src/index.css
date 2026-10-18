@@ -84,8 +84,7 @@ body {
   margin: 0;
   background-color: var(--canvas);
   background-image:
-    radial-gradient(60rem 40rem at 10% -10%, var(--aurora-1), transparent 60%),
-    radial-gradient(50rem 35rem at 110% 10%, var(--aurora-2), transparent 60%);
+    radial-gradient(60rem 40rem at 10% -10%, var(--aurora-1), transparent 60%), radial-gradient(50rem 35rem at 110% 10%, var(--aurora-2), transparent 60%);
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-sans);
@@ -123,7 +122,7 @@ body {
     color: color-mix(in oklab, var(--c) 55%, black);
   }
   .field {
-    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/30;
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink transition outline-none placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/30;
   }
 }
 

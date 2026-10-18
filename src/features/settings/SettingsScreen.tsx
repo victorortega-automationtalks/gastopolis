@@ -108,7 +108,10 @@ export function SettingsScreen() {
         </div>
       </Section>
 
-      <Section title="Tus datos" desc="Todo vive en este dispositivo (IndexedDB del navegador). Haz copias de vez en cuando: si borras los datos del navegador, se pierden.">
+      <Section
+        title="Tus datos"
+        desc="Todo vive en este dispositivo (IndexedDB del navegador). Haz copias de vez en cuando: si borras los datos del navegador, se pierden."
+      >
         <div className="flex flex-wrap gap-2">
           <Button onClick={backup}>
             <Download size={15} /> Descargar copia (.json)

@@ -49,6 +49,8 @@ Rejilla de tarjetas con una mini-Ciudad viva en el centro. KPIs (ingresos, gasto
 ### Ciudad (fase 2)
 Treemap 3D voxelizado: superficie = importe, altura = nº de movimientos (configurable: media, % de presupuesto, variación), color = categoría o calor. Clic en un bloque → la cámara entra y se subdivide (categoría → subcategoría → concepto → movimiento), como WinDirStat. Breadcrumb, `Esc` para subir, panel lateral sincronizado (hover en la lista ilumina el bloque). `InstancedMesh` para miles de bloques a 60 fps.
 
+**Implementación (fase 2):** la jerarquía (`model/hierarchy.ts`) baja por subcategorías antes de pasar a la siguiente dimensión y siempre termina en movimientos; los ids son rutas, así la navegación sobrevive a cambios de filtro. El layout (`scenes/city/layout.ts`) es un treemap squarify de dos niveles con calles entre distritos; los edificios heredan el color de su barrio con variaciones de tono. Edificios y tejados son `InstancedMesh`; las ventanas salen de un shader en coordenadas de mundo. Los rótulos son DOM proyectado cada fotograma con detección de choques (no `drei/Html`). La paleta de categorías es la validada por `validate_palette.js` sobre los dos fondos; el modo «calor» usa una rampa secuencial de un solo tono.
+
 ### Cordillera (fase 3)
 Relieve mes × categoría. Clic en una celda → Ciudad filtrada a ese mes y categoría.
 
@@ -89,7 +91,7 @@ Tabla virtualizada con orden, filtros globales (periodo, tipo, búsqueda), selec
 ## Fases
 
 1. **Base** — scaffold, modelo, importador, Movimientos, Categorías, Ajustes. ✅
-2. **Ciudad** — treemap 3D con drill-down y panel lateral.
+2. **Ciudad** — treemap 3D con drill-down y panel lateral. ✅
 3. **Cordillera, Balanza, deslizador temporal, Inicio.**
 4. **Alta rápida, reglas, Objetivos, Detector de fugas.**
 5. **Laboratorio + Horizonte.**

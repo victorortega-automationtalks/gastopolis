@@ -22,7 +22,7 @@ export function Button({
       {...rest}
       className={clsx(
         'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg font-medium transition select-none disabled:pointer-events-none disabled:opacity-40',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+        'focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none',
         size === 'sm' && 'h-8 px-2.5 text-xs',
         size === 'md' && 'h-9 px-3.5 text-sm',
         size === 'lg' && 'h-12 px-5 text-base',
@@ -43,7 +43,19 @@ export function Card({ className, children }: { className?: string; children: Re
   return <div className={clsx('glass rounded-2xl', className)}>{children}</div>
 }
 
-export function Money({ value, className, signed, compact, kind }: { value: number; className?: string; signed?: boolean; compact?: boolean; kind?: Kind | 'auto' }) {
+export function Money({
+  value,
+  className,
+  signed,
+  compact,
+  kind,
+}: {
+  value: number
+  className?: string
+  signed?: boolean
+  compact?: boolean
+  kind?: Kind | 'auto'
+}) {
   const s = useSettings()
   const tone =
     kind === 'auto'
@@ -148,7 +160,11 @@ export function Modal({
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{footer}</div>}
+        {footer && (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,
