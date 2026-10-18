@@ -1,0 +1,150 @@
+@import 'tailwindcss';
+
+/* Tokens de tema. Las escenas 3D leen los mismos valores vía getComputedStyle. */
+:root,
+:root[data-theme='neon'] {
+  color-scheme: dark;
+  --canvas: #06070c;
+  --canvas-2: #0b0d16;
+  --surface: rgb(255 255 255 / 0.035);
+  --surface-2: rgb(255 255 255 / 0.065);
+  --surface-solid: #10121d;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --ink: #eef0ff;
+  --ink-muted: #a3a8c3;
+  --ink-faint: #6b7092;
+  --accent: #8b5cf6;
+  --accent-2: #22d3ee;
+  --income: #34d399;
+  --expense: #fb7185;
+  --transfer: #fbbf24;
+  --danger: #f43f5e;
+  --warn: #f59e0b;
+  --glow: rgb(139 92 246 / 0.35);
+  --aurora-1: rgb(139 92 246 / 0.16);
+  --aurora-2: rgb(34 211 238 / 0.1);
+}
+
+:root[data-theme='polar'] {
+  color-scheme: light;
+  --canvas: #f3f4fa;
+  --canvas-2: #e9ebf5;
+  --surface: rgb(255 255 255 / 0.7);
+  --surface-2: rgb(255 255 255 / 0.92);
+  --surface-solid: #ffffff;
+  --line: rgb(20 22 40 / 0.08);
+  --line-strong: rgb(20 22 40 / 0.16);
+  --ink: #12142a;
+  --ink-muted: #4c5173;
+  --ink-faint: #8287a6;
+  --accent: #7c3aed;
+  --accent-2: #0891b2;
+  --income: #059669;
+  --expense: #e11d48;
+  --transfer: #d97706;
+  --danger: #e11d48;
+  --warn: #d97706;
+  --glow: rgb(124 58 237 / 0.2);
+  --aurora-1: rgb(124 58 237 / 0.1);
+  --aurora-2: rgb(8 145 178 / 0.08);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-canvas-2: var(--canvas-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-solid: var(--surface-solid);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-income: var(--income);
+  --color-expense: var(--expense);
+  --color-transfer: var(--transfer);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Inter Variable', ui-sans-serif, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--canvas);
+  background-image:
+    radial-gradient(60rem 40rem at 10% -10%, var(--aurora-1), transparent 60%),
+    radial-gradient(50rem 35rem at 110% 10%, var(--aurora-2), transparent 60%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--glow);
+}
+
+@layer components {
+  .glass {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .text-gradient {
+    background: linear-gradient(100deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  /* Texto con el color de su categoría (--c). En tema claro se oscurece para que se lea sobre blanco. */
+  .chip-ink {
+    color: var(--c);
+  }
+  :root[data-theme='polar'] .chip-ink {
+    color: color-mix(in oklab, var(--c) 55%, black);
+  }
+  .field {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/30;
+  }
+}
+
+/* Scrollbars discretas */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+}
+:root[data-theme='polar'] input[type='date']::-webkit-calendar-picker-indicator {
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
