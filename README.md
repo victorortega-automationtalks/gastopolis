@@ -17,7 +17,7 @@ npm run build      # tsc + build de producción en dist/
 
 ## Qué hace ya
 
-- **Ciudad 3D**: cada categoría es un barrio y cada concepto un edificio (superficie = importe; altura = nº de movimientos, importe o media). Clic para seleccionar, clic en un barrio o doble clic para entrar, Esc para subir — como WinDirStat. Panel lateral sincronizado con barras por mes, bloques hijos y últimos movimientos; en móvil, hoja inferior. Agrupación configurable (categoría → concepto, por meses…), color por categoría o por calor, ventanas iluminadas, bloom y calidad automática para móviles.
+- **Ciudad 3D**: cada categoría es un barrio y cada concepto un edificio (superficie = importe; altura = nº de movimientos, importe o media). Clic para seleccionar, clic en un barrio o doble clic para entrar, Esc para subir — como WinDirStat. Panel lateral sincronizado con barras por mes, bloques hijos y últimos movimientos; en móvil, hoja inferior. Agrupación configurable (categoría → concepto, por meses…), color por categoría o por calor. Ambientada como una ciudad nocturna real: racimos de torres con ventanas encendidas, tráfico con faros, farolas, río con barcos y reflejos, extrarradio, parques y cielo estrellado; calidad automática para móviles.
 - **Importar Excel/CSV** (`.xlsx`, `.xlsm`, `.xls`, `.csv`): detecta tablas de movimientos aunque estén una al lado de otra, propone el mapeo de columnas, convierte Ahorro/Cripto en transferencias, avisa de filas que no puede leer y no duplica si reimportas. Cada importación se puede deshacer.
 - **Movimientos**: tabla virtualizada, filtros por periodo, tipo y texto; edición, alta manual y acciones en bloque con deshacer.
 - **Categorías**: jerarquía, color, icono, presupuesto mensual, cambio de tipo y fusión.

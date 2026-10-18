@@ -29,11 +29,11 @@ export function createWindowMaterial(windowColor: string, intensity: number): TH
         {
           float side = 1.0 - step(0.5, abs(vONormal.y));
           float u = abs(vONormal.x) > 0.5 ? vWPos.z : vWPos.x;
-          vec2 cell = vec2(u / 0.9, (vWPos.y - 0.35) / 1.15);
+          vec2 cell = vec2(u / 0.5, (vWPos.y - 0.35) / 0.62);
           vec2 f = fract(cell);
-          float win = step(0.22, f.x) * step(f.x, 0.78) * step(0.28, f.y) * step(f.y, 0.78);
+          float win = step(0.2, f.x) * step(f.x, 0.8) * step(0.25, f.y) * step(f.y, 0.8);
           float rnd = fract(sin(dot(floor(cell) + floor(vWPos.xz * 0.01), vec2(12.9898, 78.233))) * 43758.5453);
-          float lit = win * side * step(0.58, rnd) * step(0.6, vWPos.y);
+          float lit = win * side * step(0.62, rnd) * step(0.6, vWPos.y);
           totalEmissiveRadiance += uWindow * lit * (0.55 + 0.45 * fract(rnd * 7.0));
         }`,
       )

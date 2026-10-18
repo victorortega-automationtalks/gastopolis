@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildHierarchy, findById, movementsOf, resolvePath } from '../../model/hierarchy'
 import type { Category, Movement } from '../../model/types'
-import { H_MAX, H_MIN, layoutCity } from './layout'
+import { H_MAX, H_MIN, layoutCity, splitTowers } from './layout'
 
 const cat = (id: string, name: string, parentId: string | null = null): Category => ({
   id,
@@ -123,5 +123,35 @@ describe('layout de la ciudad', () => {
     const tallest = [...l.buildings].sort((a, b) => b.h - a.h)[0]
     expect(tallest.node.label).toBe('Gasolina')
     expect(tallest.h).toBeCloseTo(H_MAX)
+  })
+})
+
+describe('torres', () => {
+  it('un solar pequeño es una sola torre', () => {
+    expect(splitTowers(4, 3, 10, 'a', false)).toEqual([{ dx: 0, dz: 0, w: 4, d: 3, h: 10 }])
+  })
+
+  it('un solar grande se reparte en torres dentro del solar; la más alta mide h', () => {
+    const ts = splitTowers(22, 12, 20, 'root/c:x', false)
+    expect(ts.length).toBe(4 * 2)
+    expect(Math.max(...ts.map((t) => t.h))).toBe(20)
+    expect(ts.every((t) => t.h <= 20 && t.h >= 20 * 0.42)).toBe(true)
+    for (const t of ts) {
+      expect(Math.abs(t.dx) + t.w / 2).toBeLessThanOrEqual(11 + 1e-9)
+      expect(Math.abs(t.dz) + t.d / 2).toBeLessThanOrEqual(6 + 1e-9)
+    }
+    const area = ts.reduce((a, t) => a + t.w * t.d, 0)
+    expect(area / (22 * 12)).toBeGreaterThan(0.9)
+  })
+
+  it('es determinista y en modo plano todas miden lo mismo', () => {
+    expect(splitTowers(22, 12, 20, 'k', false)).toEqual(splitTowers(22, 12, 20, 'k', false))
+    expect(new Set(splitTowers(22, 12, 3, 'k', true).map((t) => t.h)).size).toBe(1)
+  })
+
+  it('cada edificio del layout tiene torres y la más alta es su altura', () => {
+    const root = buildHierarchy(movements, categories, ['category', 'concept'], 'Gastos')
+    const l = layoutCity(root, { depth: 1, heightBy: 'value', colorBy: 'category' })
+    for (const b of l.buildings) expect(Math.max(...b.towers.map((t) => t.h))).toBeCloseTo(b.h)
   })
 })

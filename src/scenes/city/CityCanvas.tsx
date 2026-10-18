@@ -1,12 +1,17 @@
-import { CameraControls, Grid, useCursor } from '@react-three/drei'
+import { CameraControls, useCursor } from '@react-three/drei'
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ComponentRef } from 'react'
 import * as THREE from 'three'
 import { shade } from '../../lib/color'
-import { fmtDate, fmtMoney } from '../../model/format'
+import { hashString } from '../../lib/random'
+import { fmtDate, fmtMoney, fmtPercent } from '../../model/format'
 import type { CityNode } from '../../model/hierarchy'
 import type { ResolvedQuality, SceneColors } from '../common'
+import { CategoryIcon } from '../../ui/icons'
+import { ambientFor } from './ambient'
+import { CityDecor, Sky } from './CityDecor'
+import { buildDecor } from './decor'
 import { baseY, PLINTH_H, type Block, type CityLayout } from './layout'
 import { createWindowMaterial } from './windowMaterial'
 
@@ -20,6 +25,12 @@ export interface CityCanvasProps {
   locale: string
   /** Cambia al recentrar o al cambiar de vista: la cámara vuelve a encuadrar. */
   frameKey: string
+  /** Id del nodo visible: siembra el decorado para que no cambie entre renders. */
+  viewId: string
+  /** Importe del nodo visible, para el % de cada rótulo. */
+  total: number
+  /** Icono de categoría de un nodo, si lo tiene. */
+  iconFor: (node: CityNode) => string | undefined
   onHover: (id: string | null) => void
   onSelect: (node: CityNode | null) => void
   onEnter: (node: CityNode) => void
@@ -47,18 +58,30 @@ function Buildings({
   onHover,
   onSelect,
   onEnter,
-}: Omit<CityCanvasProps, 'quality' | 'currency' | 'locale' | 'frameKey'>) {
+}: Pick<CityCanvasProps, 'layout' | 'selectedId' | 'hoveredId' | 'colors' | 'onHover' | 'onSelect' | 'onEnter'>) {
   const body = useRef<THREE.InstancedMesh>(null!)
   const roof = useRef<THREE.InstancedMesh>(null!)
-  const n = layout.buildings.length
+  // Una instancia por torre; `owner` dice a qué edificio pertenece cada una (para clics y colores).
+  const { towers, owner } = useMemo(() => {
+    const towers: { b: Block; t: Block['towers'][number] }[] = []
+    const owner: number[] = []
+    layout.buildings.forEach((b, i) =>
+      b.towers.forEach((t) => {
+        towers.push({ b, t })
+        owner.push(i)
+      }),
+    )
+    return { towers, owner }
+  }, [layout])
+  const n = towers.length
   const geo = useMemo(() => new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), [])
   const material = useMemo(() => createWindowMaterial(colors.dark ? '#ffd7a1' : '#fff3d6', colors.dark ? 1.25 : 0.35), [colors.dark])
   const roofMat = useMemo(() => new THREE.MeshBasicMaterial({ toneMapped: false }), [])
   const anim = useRef({ start: -1, running: true })
   const delays = useMemo(() => {
     const max = layout.size * 0.71
-    return layout.buildings.map((b) => (Math.hypot(b.x, b.z) / max) * 0.45)
-  }, [layout])
+    return towers.map(({ b, t }) => (Math.hypot(b.x + t.dx, b.z + t.dz) / max) * 0.45)
+  }, [layout, towers])
 
   useEffect(() => () => material.dispose(), [material])
 
@@ -69,7 +92,7 @@ function Buildings({
   useLayoutEffect(() => {
     if (!body.current || !roof.current) return
     const focus = selectedId ?? null
-    layout.buildings.forEach((b, i) => {
+    towers.forEach(({ b }, i) => {
       const group = groupOf(layout, b)
       const sel = focus != null && (b.node.id === focus || group === focus)
       const hov = hoveredId != null && (b.node.id === hoveredId || group === hoveredId)
@@ -82,7 +105,7 @@ function Buildings({
     })
     if (body.current.instanceColor) body.current.instanceColor.needsUpdate = true
     if (roof.current.instanceColor) roof.current.instanceColor.needsUpdate = true
-  }, [layout, selectedId, hoveredId, colors.dark])
+  }, [layout, towers, selectedId, hoveredId, colors.dark])
 
   useFrame(({ clock }) => {
     const a = anim.current
@@ -90,19 +113,21 @@ function Buildings({
     if (a.start < 0) a.start = clock.elapsedTime
     const t = reducedMotion() ? 1e9 : clock.elapsedTime - a.start
     let done = true
-    layout.buildings.forEach((b, i) => {
+    towers.forEach(({ b, t: tower }, i) => {
       const p = Math.min(1, Math.max(0, (t - delays[i]) / GROW_SECONDS))
       if (p < 1) done = false
       const y0 = baseY(b)
-      const h = Math.max(0.001, b.h * easeOut(p))
-      tmp.position.set(b.x, y0, b.z)
-      tmp.scale.set(b.w, h, b.d)
+      const h = Math.max(0.001, tower.h * easeOut(p))
+      const x = b.x + tower.dx
+      const z = b.z + tower.dz
+      tmp.position.set(x, y0, z)
+      tmp.scale.set(tower.w, h, tower.d)
       tmp.updateMatrix()
       body.current.setMatrixAt(i, tmp.matrix)
-      // Tejado algo metido: deja un borde oscuro y no se convierte en una losa de color en los edificios grandes.
-      const inset = Math.min(0.5, Math.min(b.w, b.d) * 0.08)
-      tmp.position.set(b.x, y0 + h, b.z)
-      tmp.scale.set(Math.max(0.02, b.w - 2 * inset), ROOF, Math.max(0.02, b.d - 2 * inset))
+      // Tejado algo metido: deja un borde oscuro y no se convierte en una losa de color.
+      const inset = Math.min(0.4, Math.min(tower.w, tower.d) * 0.08)
+      tmp.position.set(x, y0 + h, z)
+      tmp.scale.set(Math.max(0.02, tower.w - 2 * inset), ROOF, Math.max(0.02, tower.d - 2 * inset))
       tmp.updateMatrix()
       roof.current.setMatrixAt(i, tmp.matrix)
     })
@@ -115,7 +140,7 @@ function Buildings({
     }
   })
 
-  const nodeAt = (e: ThreeEvent<PointerEvent | MouseEvent>) => (e.instanceId != null ? layout.buildings[e.instanceId]?.node : undefined)
+  const nodeAt = (e: ThreeEvent<PointerEvent | MouseEvent>) => (e.instanceId != null ? layout.buildings[owner[e.instanceId]]?.node : undefined)
 
   return (
     <>
@@ -202,6 +227,7 @@ interface LabelSpec {
   title: string
   value: string
   sub?: string
+  icon?: string
   /** El de foco (hover/selección) va encima de su edificio y nunca se oculta. */
   focus?: boolean
 }
@@ -213,7 +239,9 @@ function useLabelSpecs({
   quality,
   currency,
   locale,
-}: Pick<CityCanvasProps, 'layout' | 'hoveredId' | 'selectedId' | 'quality' | 'currency' | 'locale'>): LabelSpec[] {
+  total,
+  iconFor,
+}: Pick<CityCanvasProps, 'layout' | 'hoveredId' | 'selectedId' | 'quality' | 'currency' | 'locale' | 'total' | 'iconFor'>): LabelSpec[] {
   return useMemo(() => {
     const area = layout.size * layout.size
     const max = quality === 'high' ? 24 : 12
@@ -227,7 +255,9 @@ function useLabelSpecs({
         pos: withDistricts ? [b.x, PLINTH_H, b.z + b.d / 2] : [b.x, baseY(b) + b.h + 0.4, b.z],
         color: b.color,
         title: b.node.label,
-        value: fmtMoney(b.node.value, { currency, locale, compact: true }),
+        value: fmtMoney(b.node.value, { currency, locale }),
+        sub: total > 0 ? fmtPercent(b.node.value / total, locale) : undefined,
+        icon: iconFor(b.node),
       }))
     const focusId = hoveredId ?? selectedId
     const focus = layout.buildings.find((b) => b.node.id === focusId)
@@ -239,11 +269,12 @@ function useLabelSpecs({
         title: focus.node.label,
         value: fmtMoney(focus.node.value, { currency, locale }),
         sub: focus.node.movement ? fmtDate(focus.node.movement.date) : `${focus.node.count} ${focus.node.count === 1 ? 'movimiento' : 'movimientos'}`,
+        icon: iconFor(focus.node),
         focus: true,
       })
     }
     return fixed
-  }, [layout, hoveredId, selectedId, quality, currency, locale])
+  }, [layout, hoveredId, selectedId, quality, currency, locale, total, iconFor])
 }
 
 const projected = new THREE.Vector3()
@@ -302,22 +333,34 @@ function LabelLayer({ specs, els }: { specs: LabelSpec[]; els: Map<string, HTMLD
             style={{ visibility: 'hidden' }}
           >
             <div className="flex max-w-56 items-center gap-1.5 truncate font-semibold">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
+              {s.icon ? (
+                <CategoryIcon name={s.icon} size={13} className="shrink-0" />
+              ) : (
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
+              )}
               {s.title}
             </div>
             <div className="num mt-0.5 text-sm">{s.value}</div>
             {s.sub && <div className="text-white/60">{s.sub}</div>}
           </div>
         ) : (
+          // Rótulo de barrio: icono en su color, nombre e «importe · %», como un cartel flotante.
           <div
             key={s.id}
             ref={register(s.id)}
-            className="absolute top-0 left-0 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/55 px-2 py-0.5 text-[11px] whitespace-nowrap text-white shadow-lg backdrop-blur-sm"
-            style={{ visibility: 'hidden' }}
+            className="absolute top-0 left-0 flex items-center gap-2 rounded-xl border border-white/12 bg-black/60 py-1.5 pr-3 pl-1.5 whitespace-nowrap text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.8)] backdrop-blur-md"
+            style={{ visibility: 'hidden', boxShadow: `0 0 0 1px ${s.color}40, 0 8px 24px -8px rgba(0,0,0,.8)` }}
           >
-            <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-            <span className="max-w-36 truncate font-medium">{s.title}</span>
-            <span className="num text-white/70">{s.value}</span>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: `${s.color}33`, color: s.color }}>
+              {s.icon ? <CategoryIcon name={s.icon} size={15} /> : <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />}
+            </span>
+            <span className="leading-tight">
+              <span className="block max-w-36 truncate text-[12px] font-semibold">{s.title}</span>
+              <span className="num block text-[11px] text-white/70">
+                {s.value}
+                {s.sub && <span className="text-white/45"> · {s.sub}</span>}
+              </span>
+            </span>
           </div>
         ),
       )}
@@ -325,30 +368,45 @@ function LabelLayer({ specs, els }: { specs: LabelSpec[]; els: Map<string, HTMLD
   )
 }
 
-function Rig({ layout, frameKey }: { layout: CityLayout; frameKey: string }) {
+/**
+ * La niebla sigue a la cámara: empieza un poco por delante de la ciudad y termina pasado el extrarradio, sea cual
+ * sea el encuadre (en móvil vertical la cámara se aleja mucho más para que quepa el ancho).
+ */
+function FogRig({ radius }: { radius: number }) {
+  useFrame(({ camera, scene }) => {
+    const fog = scene.fog as THREE.Fog | null
+    if (!fog) return
+    const d = camera.position.length()
+    fog.near = d * 0.8
+    fog.far = d + radius * 1.6
+  })
+  return null
+}
+
+function Rig({ layout, frameKey, viewId }: { layout: CityLayout; frameKey: string; viewId: string }) {
   const controls = useRef<ComponentRef<typeof CameraControls>>(null)
-  const first = useRef(true)
+  const last = useRef<{ viewId: string; portrait: boolean } | null>(null)
   const size = useThree((s) => s.size)
 
   useEffect(() => {
     const c = controls.current
     if (!c) return
+    // En vertical la ciudad (cuadrada) aprovecha mejor la pantalla vista algo más desde arriba.
+    const portrait = size.height > size.width
+    const prev = last.current
+    if (!prev || prev.portrait !== portrait) void c.rotateTo(Math.PI / 5, portrait ? 0.8 : 0.95, Boolean(prev))
+    // Pequeño giro al cambiar de vista para que se note que «entras» (no al recentrar ni al redimensionar).
+    else if (prev.viewId !== viewId) void c.rotate(-0.25, 0, true)
+    last.current = { viewId, portrait }
+    // fitToSphere y no fitToBox: fitToBox redondea los ángulos a la cara más cercana de la caja y deja la vista de frente.
     const maxH = Math.max(4, ...layout.buildings.map((b) => baseY(b) + b.h))
     const half = layout.size / 2
-    const box = new THREE.Box3(new THREE.Vector3(-half, 0, -half), new THREE.Vector3(half, maxH, half))
-    if (first.current) {
-      first.current = false
-      void c.rotateTo(Math.PI / 5, 0.95, false)
-    } else {
-      // Pequeño giro en cada cambio de vista para que se note que «entras».
-      void c.rotate(-0.25, 0, true)
-    }
-    const portrait = size.height > size.width
-    void c.fitToBox(box, true, { paddingTop: 4, paddingBottom: portrait ? 8 : 6, paddingLeft: 4, paddingRight: 4 })
-  }, [frameKey, layout, size.width, size.height])
+    const radius = Math.hypot(half, half, maxH / 2) * (portrait ? 1.02 : 0.95)
+    void c.fitToSphere(new THREE.Sphere(new THREE.Vector3(0, maxH / 3, 0), radius), true)
+  }, [frameKey, viewId, layout, size.width, size.height])
 
   return (
-    <CameraControls ref={controls} makeDefault minPolarAngle={0.12} maxPolarAngle={1.32} minDistance={12} maxDistance={420} dollyToCursor smoothTime={0.35} />
+    <CameraControls ref={controls} makeDefault minPolarAngle={0.12} maxPolarAngle={1.32} minDistance={12} maxDistance={800} dollyToCursor smoothTime={0.35} />
   )
 }
 
@@ -359,6 +417,7 @@ export function CityCanvas(props: CityCanvasProps) {
   useCursor(hovering)
   const specs = useLabelSpecs(props)
   const labelEls = useMemo(() => new Map<string, HTMLDivElement>(), [])
+  const decor = useMemo(() => buildDecor(layout, { quality, seed: hashString(props.viewId) }), [layout, quality, props.viewId])
 
   return (
     <div className="absolute inset-0">
@@ -366,11 +425,13 @@ export function CityCanvas(props: CityCanvasProps) {
         shadows={high ? 'percentage' : false}
         dpr={high ? [1, 2] : 1}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
-        camera={{ position: [80, 90, 110], fov: 38, near: 0.5, far: 2500 }}
+        camera={{ position: [80, 90, 110], fov: 38, near: 0.5, far: 5000 }}
         onPointerMissed={() => props.onSelect(null)}
       >
-        <color attach="background" args={[colors.canvas]} />
-        <fog attach="fog" args={[colors.canvas, 220, 620]} />
+        <Sky dark={colors.dark} />
+        {/* La niebla funde el extrarradio con el cielo: el centro (tus datos) queda nítido. */}
+        <fog attach="fog" args={[ambientFor(colors.dark).horizon, 200, 500]} />
+        <FogRig radius={decor.outskirtsRadius} />
         <ambientLight intensity={colors.dark ? 0.35 : 0.8} />
         <hemisphereLight args={[colors.accent2, colors.canvas, colors.dark ? 0.35 : 0.5]} />
         <directionalLight
@@ -387,29 +448,13 @@ export function CityCanvas(props: CityCanvasProps) {
         />
         <directionalLight position={[-90, 40, -80]} intensity={colors.dark ? 0.9 : 0.4} color={colors.accent} />
 
-        <Grid
-          position={[0, -0.01, 0]}
-          args={[layout.size * 6, layout.size * 6]}
-          cellSize={2.5}
-          cellThickness={0.6}
-          cellColor={colors.line}
-          sectionSize={layout.size / 4}
-          sectionThickness={1}
-          sectionColor={colors.dark ? colors.accent : colors.inkMuted}
-          fadeDistance={layout.size * 7}
-          fadeStrength={1.5}
-          infiniteGrid
-        />
-        <mesh rotation-x={-Math.PI / 2} position={[0, -0.05, 0]} receiveShadow>
-          <planeGeometry args={[layout.size * 8, layout.size * 8]} />
-          <shadowMaterial opacity={colors.dark ? 0.45 : 0.15} />
-        </mesh>
+        <CityDecor decor={decor} layout={layout} dark={colors.dark} quality={quality} />
 
         {/* key por número de instancias: si cambia, se crea otro InstancedMesh con la capacidad justa. */}
         <Districts key={`d${layout.districts.length}`} {...props} />
-        <Buildings key={`b${layout.buildings.length}`} {...props} />
+        <Buildings key={`b${layout.buildings.reduce((n, b) => n + b.towers.length, 0)}`} {...props} />
         <LabelProjector specs={specs} els={labelEls} />
-        <Rig layout={layout} frameKey={frameKey} />
+        <Rig layout={layout} frameKey={frameKey} viewId={props.viewId} />
 
         {high && (
           <EffectComposer multisampling={4}>

@@ -1,5 +1,6 @@
 import { hierarchy, treemap, treemapSquarify } from 'd3-hierarchy'
 import { heatColor, shade } from '../../lib/color'
+import { hashString, mulberry32 } from '../../lib/random'
 import type { CityNode } from '../../model/hierarchy'
 
 export type HeightBy = 'count' | 'value' | 'avg' | 'flat'
@@ -28,6 +29,49 @@ export interface Block {
   color: string
   /** Índice del distrito al que pertenece (−1 si va suelto). */
   district: number
+  /** Torres en que se reparte el solar (vacío en los distritos). La más alta mide exactamente `h`. */
+  towers: Tower[]
+}
+
+/** Torre dentro del solar de un edificio: desplazamiento desde su centro, planta y altura. */
+export interface Tower {
+  dx: number
+  dz: number
+  w: number
+  d: number
+  h: number
+}
+
+/** Planta típica de una torre: los solares más grandes se reparten en varias. */
+const TOWER_SIZE = 5.5
+const TOWER_GAP = 0.2
+
+/**
+ * Un solar grande no es una losa: se reparte en una cuadrícula de torres del mismo color. La superficie total
+ * sigue siendo la del solar (menos las juntas) y la más alta mide `h`, así el dato se sigue leyendo igual;
+ * las demás son más bajas, por arquitectura. Determinista por el id del nodo.
+ */
+export function splitTowers(w: number, d: number, h: number, seedKey: string, uniform: boolean): Tower[] {
+  const nx = Math.min(6, Math.max(1, Math.round(w / TOWER_SIZE)))
+  const nz = Math.min(6, Math.max(1, Math.round(d / TOWER_SIZE)))
+  if (nx * nz === 1) return [{ dx: 0, dz: 0, w, d, h }]
+  const rnd = mulberry32(hashString(seedKey))
+  const tw = (w - (nx - 1) * TOWER_GAP) / nx
+  const td = (d - (nz - 1) * TOWER_GAP) / nz
+  const towers: Tower[] = []
+  for (let i = 0; i < nx; i++)
+    for (let j = 0; j < nz; j++)
+      towers.push({
+        dx: -w / 2 + tw / 2 + i * (tw + TOWER_GAP),
+        dz: -d / 2 + td / 2 + j * (td + TOWER_GAP),
+        w: tw,
+        d: td,
+        h: uniform ? h : h * (0.42 + 0.5 * rnd()),
+      })
+  // La que lleva la altura del dato: una de las centrales, para que el perfil tenga «skyline».
+  const tallest = Math.floor(nx / 2) * nz + Math.floor(nz / 2)
+  towers[tallest].h = h
+  return towers
 }
 
 /** Altura de la base: los edificios dentro de un distrito se apoyan sobre su plataforma. */
@@ -69,13 +113,14 @@ function wrap(node: CityNode, depth: number): Wrap {
  */
 export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 100 }: LayoutOptions): CityLayout {
   const tree = hierarchy<Wrap>(wrap(view, depth), (w) => w.children).sum((w) => (w.children ? 0 : Math.max(w.node.value, 1e-6)))
-  const street = size * 0.014
+  // Calles con sitio para dos carriles (los coches del decorado) y acera en cada distrito.
+  const street = size * 0.024
   const lot = size * 0.0035
   const root = treemap<Wrap>()
     .tile(treemapSquarify.ratio(1))
     .size([size, size])
     .paddingInner((n) => (n.depth === 0 ? street : lot))
-    .paddingOuter((n) => (n.depth === 0 ? 0 : size * 0.006))
+    .paddingOuter((n) => (n.depth === 0 ? 0 : size * 0.007))
     .round(false)(tree)
 
   const half = size / 2
@@ -91,7 +136,7 @@ export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 10
   for (const n of root.children ?? []) {
     if (!n.children) continue
     districtIndex.set(n.data, districts.length)
-    districts.push({ node: n.data.node, ...rect(n), h: PLINTH_H, color: n.data.node.color, district: -1 })
+    districts.push({ node: n.data.node, ...rect(n), h: PLINTH_H, color: n.data.node.color, district: -1, towers: [] })
   }
 
   const leaves = root.leaves().filter((l) => l !== root)
@@ -109,7 +154,8 @@ export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 10
     // Cada barrio es de su color (el del distrito); los edificios vecinos se distinguen con un leve cambio de tono.
     const base = district >= 0 ? districts[district].color : node.color
     const color = colorBy === 'heat' ? heatColor(Math.sqrt(node.value / maxValue)) : shade(base, k % 3 === 0 ? 0 : k % 3 === 1 ? -0.14 : 0.12)
-    return { node, ...rect(l), h, color, district }
+    const r = rect(l)
+    return { node, ...r, h, color, district, towers: splitTowers(r.w, r.d, h, node.id, heightBy === 'flat') }
   })
 
   return { size, districts, buildings }

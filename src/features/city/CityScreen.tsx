@@ -1,7 +1,7 @@
 import clsx from 'clsx'
-import { ChevronRight, ChevronUp, Crosshair, Home, SlidersHorizontal } from 'lucide-react'
+import { ChevronRight, ChevronUp, Crosshair, Home, MousePointerClick, SlidersHorizontal } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useCategories, useMovements, useSettings } from '../../data/hooks'
+import { useCategories, useCategoryMap, useMovements, useSettings } from '../../data/hooks'
 import { applyFilters } from '../../model/aggregate'
 import { KIND_LABEL_PLURAL } from '../../model/defaults'
 import { fmtMoney } from '../../model/format'
@@ -21,6 +21,7 @@ const CityCanvas = lazy(() => import('../../scenes/city/CityCanvas').then((m) =>
 export function CityScreen() {
   const { movements } = useMovements()
   const categories = useCategories()
+  const catMap = useCategoryMap()
   const settings = useSettings()
   const filters = useUI((s) => s.filters)
   const resetFilters = useUI((s) => s.resetFilters)
@@ -45,6 +46,7 @@ export function CityScreen() {
     [view, city.depth, city.heightBy, city.colorBy],
   )
   const selected = city.selectedId ? findById(view, city.selectedId) : null
+  const iconFor = useCallback((n: CityNode) => (n.type === 'category' && n.categoryId ? catMap.get(n.categoryId)?.icon : undefined), [catMap])
   const panelNode = selected ?? view
   const panelParent = selected ? (findParent(view, selected.id) ?? view) : (trail[trail.length - 2] ?? null)
 
@@ -77,6 +79,11 @@ export function CityScreen() {
   }, [modalOpen, up, enter, selected, depth])
 
   const empty = scoped.length === 0
+  const nextType = view.children?.[0]?.children?.[0]?.type
+  const hint =
+    layout.districts.length > 0
+      ? `Haz clic en un barrio para ver sus ${nextType === 'movement' ? 'movimientos' : nextType === 'month' ? 'meses' : nextType === 'category' ? 'subcategorías' : 'conceptos'}`
+      : 'Haz clic en un edificio para ver su detalle'
 
   return (
     <div className="flex h-full min-h-0 flex-col lg:flex-row">
@@ -94,6 +101,9 @@ export function CityScreen() {
                 currency={settings.currency}
                 locale={settings.locale}
                 frameKey={`${view.id}|${recenter}|${city.depth}`}
+                viewId={view.id}
+                total={view.value}
+                iconFor={iconFor}
                 onHover={city.hover}
                 onSelect={(n) => city.select(n?.id ?? null)}
                 onEnter={enter}
@@ -147,8 +157,13 @@ export function CityScreen() {
         )}
 
         {!empty && (
-          <p className="pointer-events-none absolute bottom-3 left-3 hidden rounded-lg bg-black/40 px-2.5 py-1 text-[11px] text-white/70 backdrop-blur md:block">
-            Arrastra para girar · rueda para zoom · clic: seleccionar · doble clic o clic en distrito: entrar · Esc: subir
+          <p
+            className="pointer-events-none absolute bottom-4 left-4 hidden items-center gap-2 rounded-xl border border-white/10 bg-black/55 px-3 py-2 text-xs text-white/80 shadow-lg backdrop-blur-md md:flex"
+            title="Arrastra para girar · rueda para acercar · clic: seleccionar · doble clic o clic en un barrio: entrar · Esc: subir"
+          >
+            <MousePointerClick size={15} className="text-white/60" />
+            {hint}
+            {trail.length > 1 && <span className="text-white/45">· Esc para salir</span>}
           </p>
         )}
       </div>
