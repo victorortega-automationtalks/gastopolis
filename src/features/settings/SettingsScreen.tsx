@@ -1,12 +1,13 @@
-import { Database, Download, RotateCcw, Trash2, Upload } from 'lucide-react'
-import { useRef, useState, type ReactNode } from 'react'
+import { Database, Download, Lock, RotateCcw, Trash2 } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { useBatches, useCategories, useMovements, useSettings } from '../../data/hooks'
-import { exportBackup, loadSample, removeSample, resetAll, restoreBackup, saveSettings, toCSV, undoImport, validateBackup } from '../../data/repo'
-import { downloadText, stamp } from '../../lib/download'
+import { loadSample, removeSample, resetAll, saveSettings, toCSV, undoImport } from '../../data/repo'
 import { monthName } from '../../model/format'
+import { isNative, saveFile, stamp } from '../../platform'
 import type { Quality, ThemeName } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, Field, Modal, Segmented } from '../../ui/components/primitives'
+import { BackupDialog, RestoreButton } from './backup'
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'MXN', 'ARS', 'COP', 'CLP', 'PEN']
 
@@ -26,25 +27,14 @@ export function SettingsScreen() {
   const categories = useCategories()
   const batches = useBatches()
   const toast = useUI((s) => s.toast)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [backingUp, setBackingUp] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetText, setResetText] = useState('')
   const hasSample = movements.some((m) => m.source === 'sample')
 
-  const backup = async () => {
-    const b = await exportBackup()
-    downloadText(`gastopolis-copia-${stamp()}.json`, JSON.stringify(b), 'application/json')
-    toast(`Copia descargada: ${b.movements.length} movimientos, ${b.categories.length} categorías`)
-  }
-
-  const restore = async (file: File) => {
-    try {
-      const b = validateBackup(JSON.parse(await file.text()))
-      await restoreBackup(b)
-      toast(`Copia restaurada: ${b.movements.length} movimientos`)
-    } catch (e) {
-      toast((e as Error).message, 'error')
-    }
+  const exportCsv = async () => {
+    const r = await saveFile(`gastopolis-movimientos-${stamp()}.csv`, toCSV(movements, categories), 'text/csv')
+    if (r !== 'cancelled') toast('CSV listo')
   }
 
   const sample = async () => {
@@ -133,16 +123,18 @@ export function SettingsScreen() {
 
       <Section
         title="Tus datos"
-        desc="Todo vive en este dispositivo (IndexedDB del navegador). Haz copias de vez en cuando: si borras los datos del navegador, se pierden."
+        desc={
+          isNative
+            ? 'Todo vive en este dispositivo, dentro de la app: no sale a internet. Si desinstalas la app, se borra; haz copias de vez en cuando.'
+            : 'Todo vive en este dispositivo: no sale a internet. Si borras los datos del navegador, se pierden; haz copias de vez en cuando.'
+        }
       >
         <div className="flex flex-wrap gap-2">
-          <Button onClick={backup}>
-            <Download size={15} /> Descargar copia (.json)
+          <Button onClick={() => setBackingUp(true)}>
+            <Lock size={15} /> Hacer copia
           </Button>
-          <Button onClick={() => fileRef.current?.click()}>
-            <Upload size={15} /> Restaurar copia
-          </Button>
-          <Button onClick={() => downloadText(`gastopolis-movimientos-${stamp()}.csv`, toCSV(movements, categories), 'text/csv')} disabled={!movements.length}>
+          <RestoreButton />
+          <Button onClick={exportCsv} disabled={!movements.length}>
             <Download size={15} /> Exportar CSV
           </Button>
           <Button onClick={sample}>
@@ -152,18 +144,13 @@ export function SettingsScreen() {
             <Trash2 size={15} /> Borrar todo
           </Button>
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".json,application/json"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) void restore(f)
-            e.target.value = ''
-          }}
-        />
-        <p className="mt-3 text-xs text-ink-faint">Restaurar sustituye todo lo que hay ahora por el contenido de la copia.</p>
+        <p className="mt-3 text-xs text-ink-faint">
+          {settings.lastBackupAt
+            ? `Última copia: ${new Date(settings.lastBackupAt).toLocaleDateString('es-ES', { dateStyle: 'long' })}. `
+            : 'Aún no has hecho ninguna copia. '}
+          Restaurar sustituye todo lo que hay ahora por el contenido de la copia.
+        </p>
+        <BackupDialog open={backingUp} onClose={() => setBackingUp(false)} />
       </Section>
 
       <Section title="Importaciones" desc="Cada importación se puede deshacer: se borran exactamente los movimientos que trajo.">

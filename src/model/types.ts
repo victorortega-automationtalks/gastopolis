@@ -117,6 +117,8 @@ export interface Settings {
   leakAntMax?: number
   /** Detector de fugas: días entre dos cargos iguales para considerarlos duplicados. */
   leakDupDays?: number
+  /** Cuándo se hizo la última copia de seguridad (ms). */
+  lastBackupAt?: number
 }
 
 export interface Backup {

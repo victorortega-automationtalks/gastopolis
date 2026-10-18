@@ -35,6 +35,7 @@ import { CategoryIcon } from '../../ui/icons'
 import { useOpenInCity } from '../city/openInCity'
 import { useLeaks } from '../leaks/useLeaks'
 import { Welcome } from '../onboarding/Welcome'
+import { BackupReminder } from '../settings/backup'
 import { CARD_LABEL, useDashboard, type CardId } from './store'
 import { Delta, Meter, Sparkline } from './viz'
 
@@ -148,6 +149,7 @@ export function DashboardScreen() {
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4">
+      <BackupReminder />
       <div className="flex flex-wrap items-center gap-2">
         <div className="glass flex items-center rounded-xl p-0.5">
           <button
