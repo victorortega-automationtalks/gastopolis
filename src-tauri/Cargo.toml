@@ -1,0 +1,27 @@
+[package]
+name = "gastopolis"
+version = "0.6.0"
+description = "Gastópolis: tu dinero como una ciudad en 3D, sin salir de tu ordenador"
+authors = ["Gastópolis"]
+license = ""
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+name = "gastopolis_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.3", features = [] }
+
+# Sin plugins de red (http, updater, websocket…): la app no tiene con qué conectarse a nada.
+[dependencies]
+tauri = { version = "2.12.4", features = [] }
+tauri-plugin-dialog = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
