@@ -20,7 +20,8 @@ export const NAV: NavItem[] = [
     label: 'Inicio',
     icon: LayoutDashboard,
     phase: 3,
-    filters: true,
+    // El Inicio tiene su propio selector de mes.
+    filters: false,
     blurb: 'Vista de pájaro: KPIs, mini-ciudad viva, presupuestos, fugas, objetivos y próximos cargos.',
   },
   {
@@ -88,4 +89,4 @@ export const NAV_GROUPS: { label: string; routes: Route[] }[] = [
 export const navItem = (r: Route) => NAV.find((n) => n.route === r)!
 
 /** Fase hasta la que hay pantallas construidas. */
-export const CURRENT_PHASE = 2
+export const CURRENT_PHASE = 3

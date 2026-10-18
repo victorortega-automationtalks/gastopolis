@@ -7,7 +7,7 @@ export const ROUTES: Route[] = ['inicio', 'ciudad', 'cordillera', 'balanza', 'mo
 
 function routeFromHash(): Route {
   const h = (typeof location !== 'undefined' ? location.hash : '').replace(/^#\/?/, '') as Route
-  return ROUTES.includes(h) ? h : 'movimientos'
+  return ROUTES.includes(h) ? h : 'inicio'
 }
 
 export interface Toast {

@@ -44,6 +44,9 @@ Probado contra el Excel real: 237 movimientos, 3 filas saltadas con su motivo, t
 ## Pantallas
 
 ### Inicio · vista de pájaro (fase 3)
+
+**Implementación:** selector de mes propio; si los datos se han quedado atrás (se importa a meses vencidos), arranca en el último mes con datos y avisa. Un mes en curso se compara con el anterior *hasta el mismo día*. Tarjetas: balance (cifra principal), mini-ciudad en órbita, KPIs con variación y tendencia de 12 meses, flujo mensual (barras ingresos/gastos y línea de balance, un solo eje), dónde se va el dinero, presupuestos con marca de ritmo, próximos cargos, suscripciones y recibos (detector de recurrentes con subidas de precio), racha. Se pueden reordenar y ocultar.
+
 Rejilla de tarjetas con una mini-Ciudad viva en el centro. KPIs (ingresos, gastos, ahorro neto, tasa de ahorro, proyección de cierre de mes), curva de saldo acumulado, top 5 categorías, anillos de presupuesto, resumen de fugas, progreso de objetivos, próximos cargos recurrentes y racha de días sin gastar. Tarjetas reordenables/ocultables.
 
 ### Ciudad (fase 2)
@@ -56,8 +59,12 @@ Treemap 3D voxelizado: superficie = importe, altura = nº de movimientos (config
 ### Cordillera (fase 3)
 Relieve mes × categoría. Clic en una celda → Ciudad filtrada a ese mes y categoría.
 
+**Implementación:** una cresta extruida por categoría (raíz o subcategoría), perfil con interpolación cúbica monótona (pasa por cada mes sin sobrepasarlo ni bajar de cero), la de más importe al fondo para no tapar a las demás, más de 10 se pliegan en «Otras». Rótulo de cada categoría sobre su pico, meses en el borde, cursor del mes al pasar el ratón y barras por mes en el panel.
+
 ### Balanza (fase 3)
 Torres de ingresos y gastos apiladas por categoría, transferencias en el centro, objetivos como torres de cristal. Deslizador temporal mensual o acumulado.
+
+**Implementación:** balanza física con brazo que se inclina hacia lo que pesa más (raíz de la diferencia relativa, para que un 10 % ya se note), platillos colgados con cadenas y torres apiladas por categoría raíz (más de 7 → «Otras»). Escala fija para todo el periodo, así un mes ligero se ve ligero. Tarro de cristal que se llena con lo apartado. Deslizador con reproducción; arranca en el último mes con ingresos. Clic en una franja → Ciudad de esa categoría y mes.
 
 ### Objetivos (fase 4)
 Metas de ahorro («Entrada vivienda · 40.000 € · dic 2029»): aportación mensual necesaria, fecha estimada según tu tasa de ahorro real, adelantado/atrasado, hitos 25/50/75/100 %. Las transferencias a ahorro se asignan a objetivos por regla o reparto porcentual.
@@ -94,7 +101,7 @@ Tabla virtualizada con orden, filtros globales (periodo, tipo, búsqueda), selec
 
 1. **Base** — scaffold, modelo, importador, Movimientos, Categorías, Ajustes. ✅
 2. **Ciudad** — treemap 3D con drill-down y panel lateral. ✅
-3. **Cordillera, Balanza, deslizador temporal, Inicio.**
+3. **Cordillera, Balanza, deslizador temporal, Inicio.** ✅
 4. **Alta rápida, reglas, Objetivos, Detector de fugas.**
 5. **Laboratorio + Horizonte.**
 6. **PWA, APK, CI, rendimiento con 10k movimientos, pulido.**
