@@ -1,5 +1,5 @@
 import { CameraControls, Line, MeshReflectorMaterial, useCursor } from '@react-three/drei'
-import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
 import { useEffect, useMemo, useRef, type ComponentRef } from 'react'
 import * as THREE from 'three'
@@ -28,10 +28,15 @@ export interface RidgeCanvasProps {
   frameKey: string
   onHover: (h: RidgeHover | null) => void
   onPick: (h: RidgeHover) => void
+  /** Reproducción temporal: hasta dónde (en meses, con decimales) se ve la cordillera. Null = entera. */
+  cursor?: number | null
 }
 
 const noRaycast = () => null
 const THICK = 0.55
+/** Plano de recorte de la reproducción (deja ver x ≤ constant). Uno para todo el módulo: solo hay una Cordillera a la vez. */
+const CLIP = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 1e5)
+const PLANES = [CLIP]
 const isClick = (e: ThreeEvent<MouseEvent>) => e.delta < 5
 
 function ridgeGeometry(profile: number[], width: number, depth: number): THREE.ExtrudeGeometry {
@@ -52,6 +57,7 @@ function Ridge({
   layout,
   active,
   dimmed,
+  planes,
   onHover,
   onPick,
 }: {
@@ -60,6 +66,7 @@ function Ridge({
   layout: RidgeLayout
   active: boolean
   dimmed: boolean
+  planes: THREE.Plane[]
   onHover: RidgeCanvasProps['onHover']
   onPick: RidgeCanvasProps['onPick']
 }) {
@@ -102,9 +109,12 @@ function Ridge({
           metalness={0.15}
           transparent={dimmed}
           opacity={dimmed ? 0.55 : 1}
+          clippingPlanes={planes}
+          // Al recortar en la reproducción se ve el interior: con doble cara el corte no queda hueco.
+          side={THREE.DoubleSide}
         />
       </mesh>
-      <Line points={linePoints} color={glow} lineWidth={active ? 3 : 2} toneMapped={false} raycast={noRaycast} />
+      <Line points={linePoints} color={glow} lineWidth={active ? 3 : 2} toneMapped={false} raycast={noRaycast} clippingPlanes={planes} />
     </group>
   )
 }
@@ -126,6 +136,45 @@ function Cursor({ layout, hover }: { layout: RidgeLayout; hover: RidgeHover | nu
         <meshBasicMaterial color={new THREE.Color(row.color).multiplyScalar(3)} toneMapped={false} />
       </mesh>
     </group>
+  )
+}
+
+/**
+ * Muro de luz en la fecha de la reproducción: el plano de recorte avanza con suavidad hacia el fotograma y la
+ * cordillera aparece detrás de él.
+ */
+function TimeWall({ layout, cursor, color }: { layout: RidgeLayout; cursor: number | null; color: string }) {
+  const clip = CLIP
+  const wall = useRef<THREE.Mesh>(null)
+  const start = -layout.width / 2 - 0.5
+  useFrame((_, dt) => {
+    if (cursor == null) {
+      clip.constant = 1e5
+      if (wall.current) wall.current.visible = false
+      return
+    }
+    const target = cursor * layout.spacingX - layout.width / 2 + 0.05
+    // Al empezar (o si salta hacia atrás) se coloca de golpe; si no, persigue el objetivo.
+    if (clip.constant > 1e4 || target < clip.constant - layout.spacingX * 2) clip.constant = Math.max(start, target)
+    else clip.constant += (target - clip.constant) * (1 - Math.exp(-dt * 10))
+    if (wall.current) {
+      wall.current.visible = true
+      wall.current.position.x = clip.constant
+    }
+  })
+  const span = layout.depth + layout.spacingZ * 2
+  return (
+    <mesh ref={wall} rotation-y={Math.PI / 2} position={[start, layout.maxH * 0.55, 0]} raycast={noRaycast} visible={false}>
+      <planeGeometry args={[span, layout.maxH * 1.1]} />
+      <meshBasicMaterial
+        color={new THREE.Color(color).multiplyScalar(1.6)}
+        transparent
+        opacity={0.13}
+        side={THREE.DoubleSide}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </mesh>
   )
 }
 
@@ -175,7 +224,7 @@ function Rig({ layout, frameKey }: { layout: RidgeLayout; frameKey: string }) {
       first.current = false
       void c.rotateTo(-0.5, portrait ? 0.85 : 1.02, false)
     }
-    const radius = Math.hypot(layout.width / 2, layout.depth / 2 + layout.spacingZ, layout.maxH / 2) * (portrait ? 1.05 : 0.82)
+    const radius = Math.hypot(layout.width / 2, layout.depth / 2 + layout.spacingZ, layout.maxH / 2) * (portrait ? 1.1 : 0.95)
     void c.fitToSphere(new THREE.Sphere(new THREE.Vector3(0, layout.maxH / 3, 0), radius), true)
   }, [frameKey, layout, size.width, size.height])
   return (
@@ -183,7 +232,7 @@ function Rig({ layout, frameKey }: { layout: RidgeLayout; frameKey: string }) {
   )
 }
 
-function useSpecs({ layout, hover, currency, locale }: Pick<RidgeCanvasProps, 'layout' | 'hover' | 'currency' | 'locale'>): LabelSpec[] {
+function useSpecs({ layout, hover, currency, locale, cursor }: Pick<RidgeCanvasProps, 'layout' | 'hover' | 'currency' | 'locale' | 'cursor'>): LabelSpec[] {
   return useMemo(() => {
     const specs: LabelSpec[] = []
     if (hover) {
@@ -201,15 +250,19 @@ function useSpecs({ layout, hover, currency, locale }: Pick<RidgeCanvasProps, 'l
       })
     }
     // Rótulo de cada categoría sobre su pico: dice de quién es la cresta y cuándo se disparó.
+    // En la reproducción, el pico de lo que ya se ve y lo acumulado hasta la fecha.
+    const seen = cursor == null ? Infinity : Math.floor(cursor + 1e-6)
     for (const row of layout.rows) {
-      const peak = row.values.indexOf(Math.max(...row.values))
+      const visible = row.values.slice(0, Math.min(row.values.length, seen + 1))
+      if (cursor != null && !visible.some((v) => v > 0)) continue
+      const peak = visible.indexOf(Math.max(...visible))
       specs.push({
         id: `row:${row.categoryId}`,
         pos: [peak * layout.spacingX - layout.width / 2, row.heights[peak] + 1.2, row.z],
         color: row.color,
         icon: row.icon,
         title: row.name,
-        value: fmtMoney(row.total, { currency, locale, compact: true }),
+        value: fmtMoney(cursor == null ? row.total : visible.reduce((a, v) => a + v, 0), { currency, locale, compact: true }),
         sub: `pico ${fmtMonth(layout.months[peak])}`,
       })
     }
@@ -221,7 +274,7 @@ function useSpecs({ layout, hover, currency, locale }: Pick<RidgeCanvasProps, 'l
       specs.push({ id: `m:${m}`, pos: [i * layout.spacingX - layout.width / 2, 0, front], color: '', title: fmtMonth(m), value: '', axis: true })
     })
     return specs
-  }, [layout, hover, currency, locale])
+  }, [layout, hover, currency, locale, cursor])
 }
 
 export function RidgeCanvas(props: RidgeCanvasProps) {
@@ -239,6 +292,9 @@ export function RidgeCanvas(props: RidgeCanvasProps) {
         gl={{ antialias: true, powerPreference: 'high-performance' }}
         camera={{ position: [-40, 50, 90], fov: 38, near: 0.5, far: 5000 }}
         onPointerMissed={() => props.onHover(null)}
+        onCreated={({ gl }) => {
+          gl.localClippingEnabled = true
+        }}
       >
         <Sky dark={colors.dark} />
         <fog attach="fog" args={[ambientFor(colors.dark).horizon, 150, 400]} />
@@ -267,11 +323,13 @@ export function RidgeCanvas(props: RidgeCanvasProps) {
             layout={layout}
             active={activeRow === i}
             dimmed={activeRow != null && activeRow !== i}
+            planes={PLANES}
             onHover={props.onHover}
             onPick={props.onPick}
           />
         ))}
         <Cursor layout={layout} hover={hover} />
+        <TimeWall layout={layout} cursor={props.cursor ?? null} color={colors.accent2} />
         <LabelProjector specs={specs} els={els} />
         <Rig layout={layout} frameKey={props.frameKey} />
 

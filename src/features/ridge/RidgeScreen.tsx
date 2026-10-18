@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Crosshair, MousePointerClick } from 'lucide-react'
+import { Crosshair, MousePointerClick, Play } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { useCategories, useMovements, useSettings } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
@@ -8,6 +8,7 @@ import { KIND_LABEL_PLURAL } from '../../model/defaults'
 import { fmtMoney, fmtMonth } from '../../model/format'
 import { today } from '../../model/period'
 import { monthlyByCategory } from '../../model/series'
+import { monthPosition } from '../../model/timeline'
 import { KINDS, type Kind } from '../../model/types'
 import { useQuality, useSceneColors } from '../../scenes/common'
 import { layoutRidge } from '../../scenes/ridge/layout'
@@ -15,6 +16,8 @@ import type { RidgeHover } from '../../scenes/ridge/RidgeCanvas'
 import { useRidge } from '../../scenes/ridge/store'
 import { useUI } from '../../store/ui'
 import { Button, Segmented } from '../../ui/components/primitives'
+import { TimePlayer } from '../../ui/TimePlayer'
+import { useTimeline } from '../../ui/useTimeline'
 import { CategoryIcon } from '../../ui/icons'
 import { useOpenInCity } from '../city/openInCity'
 
@@ -39,6 +42,30 @@ export function RidgeScreen() {
   )
   const layout = useMemo(() => layoutRidge(monthlyByCategory(scoped, categories, ridge.kind, ridge.level)), [scoped, categories, ridge.kind, ridge.level])
   const money = (v: number, compact = false) => fmtMoney(v, { currency: settings.currency, locale: settings.locale, compact })
+
+  // Reproducción: la cordillera se descubre detrás de un muro de luz que avanza día a día, semana a semana o mes a mes.
+  const [evolving, setEvolving] = useState(false)
+  const tl = useTimeline(scoped, 'week')
+  const cursor = evolving && tl.frame ? monthPosition(layout.months, tl.frame.to) : null
+  const sorted = useMemo(() => [...scoped].sort((a, b) => a.date.localeCompare(b.date)), [scoped])
+  const soFar = useMemo(() => {
+    if (!evolving || !tl.frame) return 0
+    let acc = 0
+    for (const m of sorted) {
+      if (m.date > tl.frame.to) break
+      acc += Math.abs(m.amount)
+    }
+    return acc
+  }, [evolving, tl.frame, sorted])
+  const startEvolution = () => {
+    setEvolving(true)
+    tl.setIndex(0)
+    tl.setPlaying(true)
+  }
+  const stopEvolution = () => {
+    tl.setPlaying(false)
+    setEvolving(false)
+  }
 
   // Clic en una cresta: abre la Ciudad con esa categoría y ese mes.
   const openInCity = useOpenInCity()
@@ -71,6 +98,7 @@ export function RidgeScreen() {
                 frameKey={`${ridge.kind}|${ridge.level}|${recenter}|${layout.months.length}`}
                 onHover={setHover}
                 onPick={pick}
+                cursor={cursor}
               />
             </Suspense>
           </div>
@@ -101,6 +129,14 @@ export function RidgeScreen() {
               ]}
               className="glass"
             />
+            <Button
+              variant="subtle"
+              className={clsx('glass', evolving && 'ring-1 ring-accent-2/60')}
+              onClick={evolving ? stopEvolution : startEvolution}
+              title="Ver cómo se levanta la cordillera con el tiempo"
+            >
+              <Play size={15} /> <span className="hidden sm:inline">Evolución</span>
+            </Button>
             <Button variant="subtle" className="glass" onClick={() => setRecenter((r) => r + 1)} title="Recentrar cámara">
               <Crosshair size={15} />
             </Button>
@@ -111,6 +147,22 @@ export function RidgeScreen() {
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
             <p className="font-display text-xl font-semibold">No hay {KIND_LABEL_PLURAL[ridge.kind].toLowerCase()} con estos filtros</p>
             <Button onClick={resetFilters}>Quitar filtros</Button>
+          </div>
+        ) : evolving ? (
+          <div className="absolute inset-x-3 bottom-[9.5rem] z-10 md:bottom-[5.5rem] lg:bottom-4 lg:left-1/2 lg:w-[36rem] lg:-translate-x-1/2">
+            <TimePlayer
+              frames={tl.frames}
+              index={tl.index}
+              onIndex={tl.setIndex}
+              playing={tl.playing}
+              onPlaying={tl.setPlaying}
+              step={tl.step}
+              onStep={tl.setStep}
+              speed={tl.speed}
+              onSpeed={tl.setSpeed}
+              extra={`${money(soFar)} acumulado`}
+              onClose={stopEvolution}
+            />
           </div>
         ) : (
           <p className="pointer-events-none absolute bottom-4 left-4 hidden items-center gap-2 rounded-xl border border-white/10 bg-black/55 px-3 py-2 text-xs text-white/80 shadow-lg backdrop-blur-md md:flex">
@@ -156,7 +208,7 @@ export function RidgeScreen() {
                         style={{
                           height: `${Math.max(4, (v / max) * 100)}%`,
                           background: row.color,
-                          opacity: hover && hover.month === k ? 1 : v > 0 ? 0.55 : 0.12,
+                          opacity: hover && hover.month === k ? 1 : cursor != null && k > cursor + 1e-6 ? 0.08 : v > 0 ? 0.55 : 0.12,
                         }}
                       />
                     ))}

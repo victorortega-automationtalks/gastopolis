@@ -170,3 +170,22 @@ describe('colores al entrar en un barrio', () => {
     expect(l.buildings.map((b) => b.color)).toEqual(concepts)
   })
 })
+
+describe('ciudad en el tiempo', () => {
+  it('cada edificio crece con lo gastado hasta la fecha', async () => {
+    const { growthIndex } = await import('./growth')
+    const root = buildHierarchy(movements, categories, ['category', 'concept'], 'Gastos')
+    const gas = root.children!.find((c) => c.categoryId === 'gas')!
+    const l = layoutCity(gas, { depth: 1, heightBy: 'value', colorBy: 'category', size: 100 })
+    const at = growthIndex(l, 'value')
+    const repsol = l.buildings.findIndex((b) => b.node.label === 'Repsol')
+    const cepsa = l.buildings.findIndex((b) => b.node.label === 'Cepsa')
+    const enero = at('2025-01-31')
+    expect(enero.value[repsol]).toBe(60)
+    expect(enero.ratio[repsol]).toBeCloseTo(60 / 115)
+    expect(enero.ratio[cepsa]).toBe(1)
+    expect(at('2024-12-31').total).toBe(0)
+    expect(at('2025-12-31').ratio[repsol]).toBe(1)
+    expect(growthIndex(l, 'count')('2025-01-31').ratio[repsol]).toBe(0.5)
+  })
+})

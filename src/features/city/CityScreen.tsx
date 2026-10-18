@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { ChevronRight, ChevronUp, Crosshair, Home, MousePointerClick, SlidersHorizontal } from 'lucide-react'
+import { ChevronRight, ChevronUp, Crosshair, Home, MousePointerClick, Play, SlidersHorizontal } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCategories, useCategoryMap, useMovements, useSettings } from '../../data/hooks'
 import { applyFilters } from '../../model/aggregate'
@@ -9,10 +9,13 @@ import { buildHierarchy, DRILL_PRESETS, findById, resolvePath, type CityNode } f
 import { today } from '../../model/period'
 import { KINDS, type Kind } from '../../model/types'
 import { useSceneColors, useQuality } from '../../scenes/common'
+import { growthIndex } from '../../scenes/city/growth'
 import { COLOR_LABEL, HEIGHT_LABEL, layoutCity, type ColorBy, type HeightBy } from '../../scenes/city/layout'
 import { useCity } from '../../scenes/city/store'
 import { useUI } from '../../store/ui'
 import { Button, Segmented } from '../../ui/components/primitives'
+import { TimePlayer } from '../../ui/TimePlayer'
+import { useTimeline } from '../../ui/useTimeline'
 import { CityPanel } from './CityPanel'
 
 // three.js y compañía solo se descargan al abrir una escena.
@@ -45,6 +48,21 @@ export function CityScreen() {
     () => layoutCity(view, { depth: city.depth, heightBy: city.heightBy, colorBy: city.colorBy }),
     [view, city.depth, city.heightBy, city.colorBy],
   )
+  // Reproducción en el tiempo: el plano es el de todo el periodo y cada edificio crece con lo gastado hasta la fecha.
+  const [evolving, setEvolving] = useState(false)
+  const tl = useTimeline(scoped, 'week')
+  const growthAt = useMemo(() => growthIndex(layout, city.heightBy === 'count' ? 'count' : 'value'), [layout, city.heightBy])
+  const growth = useMemo(() => (evolving && tl.frame ? growthAt(tl.frame.to) : null), [evolving, tl.frame, growthAt])
+  const startEvolution = () => {
+    setEvolving(true)
+    tl.setIndex(0)
+    tl.setPlaying(true)
+  }
+  const stopEvolution = () => {
+    tl.setPlaying(false)
+    setEvolving(false)
+  }
+
   const selected = city.selectedId ? findById(view, city.selectedId) : null
   const iconFor = useCallback((n: CityNode) => (n.type === 'category' && n.categoryId ? catMap.get(n.categoryId)?.icon : undefined), [catMap])
   const panelNode = selected ?? view
@@ -107,6 +125,7 @@ export function CityScreen() {
                 onHover={city.hover}
                 onSelect={(n) => city.select(n?.id ?? null)}
                 onEnter={enter}
+                growth={growth}
               />
             </Suspense>
           </div>
@@ -142,6 +161,14 @@ export function CityScreen() {
               className="glass"
             />
             <ViewOptions />
+            <Button
+              variant="subtle"
+              className={clsx('glass', evolving && 'ring-1 ring-accent-2/60')}
+              onClick={evolving ? stopEvolution : startEvolution}
+              title="Ver cómo crece la ciudad día a día, semana a semana o mes a mes"
+            >
+              <Play size={15} /> <span className="hidden sm:inline">Evolución</span>
+            </Button>
             <Button variant="subtle" className="glass" onClick={() => setRecenter((r) => r + 1)} title="Recentrar cámara">
               <Crosshair size={15} />
             </Button>
@@ -156,7 +183,25 @@ export function CityScreen() {
           </div>
         )}
 
-        {!empty && (
+        {!empty && evolving && (
+          <div className="absolute inset-x-3 bottom-[9.5rem] z-10 md:bottom-[5.5rem] lg:bottom-4 lg:left-1/2 lg:w-[36rem] lg:-translate-x-1/2">
+            <TimePlayer
+              frames={tl.frames}
+              index={tl.index}
+              onIndex={tl.setIndex}
+              playing={tl.playing}
+              onPlaying={tl.setPlaying}
+              step={tl.step}
+              onStep={tl.setStep}
+              speed={tl.speed}
+              onSpeed={tl.setSpeed}
+              extra={growth ? `${fmtMoney(growth.total, { currency: settings.currency, locale: settings.locale })} acumulado` : undefined}
+              onClose={stopEvolution}
+            />
+          </div>
+        )}
+
+        {!empty && !evolving && (
           <p
             className="pointer-events-none absolute bottom-4 left-4 hidden items-center gap-2 rounded-xl border border-white/10 bg-black/55 px-3 py-2 text-xs text-white/80 shadow-lg backdrop-blur-md md:flex"
             title="Arrastra para girar · rueda para acercar · clic: seleccionar · doble clic o clic en un barrio: entrar · Esc: subir"
