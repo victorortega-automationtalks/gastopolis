@@ -97,12 +97,16 @@ Palancas (recortar o topar una categoría, cancelar un recurrente, cambio de ing
 ### Movimientos, Categorías, Ajustes (fase 1)
 Tabla virtualizada con orden, filtros globales (periodo, tipo, búsqueda), selección múltiple para recategorizar o borrar con deshacer. Categorías con jerarquía, color, icono, presupuesto, cambio de tipo y fusión al borrar. Ajustes: moneda, inicio de año, tema, calidad 3D, copias, CSV, datos de ejemplo e historial de importaciones.
 
-## Móvil y APK (fase 6)
+## Distribución: Windows e iPhone, 100 % privada
 
-- PWA instalable y offline (`vite-plugin-pwa`).
-- **Capacitor** envuelve el mismo build en Android; `base: './'` y rutas por hash ya funcionan con `file://`.
-- GitHub Actions compila el `.apk` en cada release.
-- Desde ya: controles táctiles en las escenas, calidad gráfica automática, panel lateral que en móvil es hoja inferior, alta en tres toques.
+Decisión: **ejecutable en Windows** y **web app instalada en el iPhone**. Sin Android. Ninguna de las dos habla con un servidor: los datos nunca salen del dispositivo salvo en una copia que exporte el usuario.
+
+- **Windows — Tauri 2** (`src-tauri/`): instalador NSIS por usuario de ~2,3 MB que usa el WebView2 del sistema. Sin plugins de red ni actualizador; navegación bloqueada fuera de la app; «Guardar como» con un comando Rust propio (`save_text_file`), sin dar permisos de archivos a la web. Datos en `%LOCALAPPDATA%\es.gastopolis.app`; desinstalar no los borra salvo que se marque. Instalador sin firmar: SmartScreen avisa la primera vez.
+- **iPhone — web app** (`vite-plugin-pwa`): todo precacheado (3D incluido), funciona sin conexión desde la primera visita, se instala desde Safari en la pantalla de inicio. Instalada, iOS no aplica el borrado de 7 días a sus datos. El service worker solo se registra en el navegador (`platform/pwa.ts`). Necesita un alojamiento estático con HTTPS para instalarse y actualizarse; el alojamiento solo sirve el código, nunca ve datos.
+- **Mismo build para todo:** `base: './'` y rutas por hash. `src/platform` decide lo que cambia por plataforma (guardar archivos, almacenamiento persistente).
+- **CSP estricta** en el build y en Tauri: solo `'self'` (más el canal `ipc:` de Tauri). Ningún `connect-src` externo.
+- **Copias cifradas** (AES-GCM 256, PBKDF2-SHA256 600k) para mover datos entre PC y móvil o guardarlos fuera; aviso en el Inicio si hace más de un mes de la última.
+- **CI:** `ci.yml` (tipos, tests, lint, formato, build, clippy) en cada PR; `release.yml` con una etiqueta `v*` compila el instalador en `windows-latest` y la web app, y crea un borrador de release.
 
 ## Fases
 
@@ -111,4 +115,4 @@ Tabla virtualizada con orden, filtros globales (periodo, tipo, búsqueda), selec
 3. **Cordillera, Balanza, deslizador temporal, Inicio.** ✅
 4. **Alta rápida, reglas, Objetivos, Detector de fugas.** ✅
 5. **Laboratorio + Horizonte.**
-6. **PWA, APK, CI, rendimiento con 10k movimientos, pulido.**
+6. **Distribución (Windows + iPhone, CI)** ✅ · **rendimiento con 10k movimientos, pulido.**

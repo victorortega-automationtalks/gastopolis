@@ -18,6 +18,8 @@
 - El decorado de la Ciudad (`scenes/city/decor.ts`) es determinista y no recibe clics (`raycast` nulo); sus colores de ambiente viven en `scenes/city/ambient.ts`, no en la paleta de datos.
 - Paleta de categorías: `CATEGORY_PALETTE` en `lib/color.ts`, validada con el script del skill dataviz. Si se cambia, revalidar en modo oscuro (#06070c) y claro (#ffffff) y no reordenar a ojo.
 - Formato: `npm run format` (Prettier, sin punto y coma, comillas simples, 160 columnas).
+- **Privacidad por construcción:** la app no se conecta a nada. No añadas peticiones de red, analítica, fuentes o scripts de CDN, ni plugins de Tauri de red/actualizador. La CSP vive en `vite.config.ts` y en `src-tauri/tauri.conf.json`: si cambias una, cambia la otra.
+- Plataformas: Windows (Tauri) y web app del iPhone; **sin Android**, por decisión. Lo que dependa de la plataforma va en `src/platform` (p. ej. `saveFile`, nunca `<a download>` directo). El service worker solo en navegador.
 - Los datos reales de usuarios **no** se suben al repo. Los tests usan fixtures sintéticos que imitan su estructura.
 
 ## Probar en navegador
