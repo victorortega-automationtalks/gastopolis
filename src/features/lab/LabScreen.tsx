@@ -317,7 +317,7 @@ export function LabScreen() {
                     <LabChart
                       startMonth={startMonth}
                       series={horizon.series.map((s) => ({ id: s.id, label: s.label, color: s.color, values: s.values }))}
-                      goals={activeGoals.map((g) => ({ name: g.name, color: g.color, target: g.target }))}
+                      goals={goalRows.map(({ g, r }) => ({ name: g.name, color: g.color, month: r.after }))}
                       money={(v) => fmtMoney(v, { currency: settings.currency, locale: settings.locale, compact: true })}
                     />
                   </div>

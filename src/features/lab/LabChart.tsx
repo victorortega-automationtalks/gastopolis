@@ -2,7 +2,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import { fmtMonth } from '../../model/format'
 import { addMonths } from '../../model/series'
 
-/** Proyección en 2D: una línea por escenario y una referencia por objetivo. */
+/** Proyección en 2D: una línea por escenario y una marca vertical en el mes en que se alcanza cada objetivo. */
 export function LabChart({
   startMonth,
   series,
@@ -11,7 +11,7 @@ export function LabChart({
 }: {
   startMonth: string
   series: { id: string; label: string; color: string; values: number[] }[]
-  goals: { name: string; color: string; target: number }[]
+  goals: { name: string; color: string; month: number | null }[]
   money: (v: number) => string
 }) {
   const n = Math.max(0, ...series.map((s) => s.values.length))
@@ -20,7 +20,6 @@ export function LabChart({
     for (const s of series) row[s.id] = Math.round(s.values[m] ?? 0)
     return row
   })
-  const peak = Math.max(1, ...series.flatMap((s) => s.values))
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
@@ -38,14 +37,14 @@ export function LabChart({
           formatter={(v, name) => [money(Number(v)), series.find((s) => s.id === name)?.label ?? String(name)]}
         />
         {goals
-          .filter((g) => g.target <= peak * 1.6)
+          .filter((g) => g.month != null && g.month < n)
           .map((g) => (
             <ReferenceLine
               key={g.name}
-              y={g.target}
+              x={data[g.month!].label as string}
               stroke={g.color}
               strokeDasharray="4 4"
-              label={{ value: g.name, fill: g.color, fontSize: 11, position: 'insideTopLeft' }}
+              label={{ value: g.name, fill: g.color, fontSize: 11, position: 'insideTopRight' }}
             />
           ))}
         {series.map((s, i) => (
