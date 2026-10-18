@@ -34,6 +34,8 @@ import { Button, Card } from '../../ui/components/primitives'
 import { CategoryIcon } from '../../ui/icons'
 import { useOpenInCity } from '../city/openInCity'
 import { useLeaks } from '../leaks/useLeaks'
+import { moneyFlow } from '../../model/flow'
+import { RiverChart } from '../river/RiverChart'
 import { Welcome } from '../onboarding/Welcome'
 import { BackupReminder } from '../settings/backup'
 import { CARD_LABEL, useDashboard, type CardId } from './store'
@@ -123,6 +125,7 @@ export function DashboardScreen() {
     city: <CityCard d={d} month={month} />,
     kpis: <KpiRow d={d} money={money} locale={settings.locale} />,
     flow: <FlowCard d={d} money={money} />,
+    river: <RiverCard month={month} money={money} locale={settings.locale} />,
     top: <TopCard d={d} month={month} money={money} locale={settings.locale} />,
     budgets: <BudgetsCard d={d} money={money} />,
     upcoming: <UpcomingCard d={d} money={money} />,
@@ -137,6 +140,7 @@ export function DashboardScreen() {
     city: 'lg:col-span-7',
     kpis: 'lg:col-span-12',
     flow: 'lg:col-span-7',
+    river: 'lg:col-span-12',
     top: 'lg:col-span-5',
     budgets: 'lg:col-span-4',
     upcoming: 'lg:col-span-4',
@@ -682,6 +686,40 @@ function LeaksCard({ money }: { money: MoneyFn }) {
         {data.open.length === 0 && <li className="text-sm text-ink-faint">Nada por revisar.</li>}
       </ul>
       {data.cancelYearly > 0 && <div className="mt-3 text-xs text-income">Cancelando lo marcado ahorras {money(data.cancelYearly)} al año</div>}
+    </Card>
+  )
+}
+
+/** El Río del mes en pequeño: de dónde vino el dinero y a dónde fue. */
+function RiverCard({ month, money, locale }: { month: string; money: MoneyFn; locale: string }) {
+  const { movements } = useMovements()
+  const categories = useCategories()
+  const colors = useSceneColors()
+  const navigate = useUI((s) => s.navigate)
+  const flow = useMemo(
+    () =>
+      moneyFlow(
+        movements.filter((m) => monthKey(m.date) === month),
+        categories,
+        { splitExpenses: true, maxSources: 4, maxExpenses: 5, expenseColor: colors.expense, leftoverColor: colors.income, deficitColor: colors.transfer },
+      ),
+    [movements, categories, month, colors],
+  )
+  return (
+    <Card className="h-full p-5">
+      <CardHead
+        title={`Río de ${fmtMonth(month, true)}`}
+        action={
+          <button onClick={() => navigate('rio')} className="text-xs font-medium text-accent-2 hover:underline">
+            Abrir el Río
+          </button>
+        }
+      />
+      {flow.nodes.length ? (
+        <RiverChart flow={flow} money={(v) => money(v)} locale={locale} height={250} compact />
+      ) : (
+        <p className="py-10 text-center text-sm text-ink-muted">Sin ingresos ni gastos este mes.</p>
+      )}
     </Card>
   )
 }
