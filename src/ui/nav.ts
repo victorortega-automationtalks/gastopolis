@@ -97,4 +97,4 @@ export const NAV_GROUPS: { label: string; routes: Route[] }[] = [
 export const navItem = (r: Route) => NAV.find((n) => n.route === r)!
 
 /** Fase hasta la que hay pantallas construidas. */
-export const CURRENT_PHASE = 4
+export const CURRENT_PHASE = 5

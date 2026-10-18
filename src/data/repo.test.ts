@@ -15,6 +15,8 @@ import {
   createGoal,
   createRule,
   decideLeak,
+  deleteScenario,
+  saveScenario,
   getSettings,
   moveRule,
   deleteCategory,
@@ -30,6 +32,7 @@ import {
   validateBackup,
 } from './repo'
 import { buildSample } from './sample'
+import { DEFAULT_ASSUMPTIONS } from '../model/lab'
 
 const sheet: SheetGrid = {
   name: 'Hoja',
@@ -231,6 +234,20 @@ describe('objetivos y fugas en el repositorio', () => {
     expect(validateBackup(old).decisions).toEqual([])
   })
 
+  it('los escenarios del Laboratorio se guardan, viajan en la copia y se borran', async () => {
+    const id = await saveScenario({ name: 'Menos ocio', levers: [{ id: 'l', type: 'cut', categoryId: 'ocio', pct: 0.3 }], assumptions: DEFAULT_ASSUMPTIONS })
+    await saveScenario({ id, name: 'Menos ocio (30 %)', levers: [], assumptions: DEFAULT_ASSUMPTIONS })
+    expect(await db.scenarios.count()).toBe(1)
+    expect((await queries.scenarios())[0].name).toBe('Menos ocio (30 %)')
+    const backup = await exportBackup()
+    await resetAll()
+    expect(await db.scenarios.count()).toBe(0)
+    await restoreBackup(validateBackup(JSON.parse(JSON.stringify(backup))))
+    expect(await db.scenarios.count()).toBe(1)
+    await deleteScenario(id)
+    expect(await db.scenarios.count()).toBe(0)
+  })
+
   it('los ajustes guardados antes reciben los valores nuevos por defecto', async () => {
     await db.settings.put({ id: 'settings', currency: 'USD', locale: 'es-ES', fiscalYearStart: 1, theme: 'neon', quality: 'auto' })
     expect(await getSettings()).toMatchObject({ currency: 'USD', leakAntMax: 5, leakDupDays: 2 })
@@ -257,6 +274,7 @@ describe('migración de la base de datos', () => {
     expect(await v2.categories.count()).toBe(1)
     await v2.decisions.add({ id: 'x', status: 'ignored', decidedAt: 0, yearlyCost: 0 })
     expect(await v2.decisions.count()).toBe(1)
+    expect(await v2.scenarios.count()).toBe(0)
     v2.close()
   })
 })

@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Category, Goal, ImportBatch, LeakDecision, Merchant, Movement, Rule, Settings } from '../model/types'
+import type { Category, Goal, ImportBatch, LeakDecision, Merchant, Movement, Rule, Scenario, Settings } from '../model/types'
 
 export class GastopolisDB extends Dexie {
   movements!: EntityTable<Movement, 'id'>
@@ -10,6 +10,7 @@ export class GastopolisDB extends Dexie {
   batches!: EntityTable<ImportBatch, 'id'>
   settings!: EntityTable<Settings, 'id'>
   decisions!: EntityTable<LeakDecision, 'id'>
+  scenarios!: EntityTable<Scenario, 'id'>
 
   constructor(name = 'gastopolis') {
     super(name)
@@ -24,6 +25,8 @@ export class GastopolisDB extends Dexie {
     })
     // v2: decisiones del detector de fugas. Los objetivos ganan campos, pero no índices.
     this.version(2).stores({ decisions: 'id' })
+    // v3: escenarios guardados del Laboratorio.
+    this.version(3).stores({ scenarios: 'id, createdAt' })
   }
 }
 

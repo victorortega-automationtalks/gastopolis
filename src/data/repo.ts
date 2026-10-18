@@ -4,7 +4,7 @@ import { normalizeKey } from '../lib/text'
 import { signFor } from '../model/aggregate'
 import { DEFAULT_SETTINGS, guessIcon } from '../model/defaults'
 import { previewRules } from '../model/rules'
-import type { Backup, Category, Goal, GoalContribution, Kind, LeakStatus, Movement, Rule, Settings } from '../model/types'
+import type { Backup, Category, Goal, GoalContribution, Kind, LeakStatus, Movement, Rule, Scenario, Settings } from '../model/types'
 import { categoryIdentity, type ImportPlan } from '../import/plan'
 import { db } from './db'
 
@@ -265,7 +265,7 @@ export async function deleteCategory(id: string, reassignTo: string | null): Pro
 // ── Copias de seguridad ────────────────────────────────────────────────────
 
 export async function exportBackup(): Promise<Backup> {
-  const [settings, categories, movements, merchants, rules, goals, batches, decisions] = await Promise.all([
+  const [settings, categories, movements, merchants, rules, goals, batches, decisions, scenarios] = await Promise.all([
     getSettings(),
     db.categories.toArray(),
     db.movements.toArray(),
@@ -274,8 +274,22 @@ export async function exportBackup(): Promise<Backup> {
     db.goals.toArray(),
     db.batches.toArray(),
     db.decisions.toArray(),
+    db.scenarios.toArray(),
   ])
-  return { app: 'gastopolis', version: 1, exportedAt: new Date().toISOString(), settings, categories, movements, merchants, rules, goals, batches, decisions }
+  return {
+    app: 'gastopolis',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings,
+    categories,
+    movements,
+    merchants,
+    rules,
+    goals,
+    batches,
+    decisions,
+    scenarios,
+  }
 }
 
 export function validateBackup(data: unknown): Backup {
@@ -286,12 +300,12 @@ export function validateBackup(data: unknown): Backup {
   const catIds = new Set(b.categories.map((c) => c.id))
   const orphan = b.movements.find((m) => !catIds.has(m.categoryId))
   if (orphan) throw new Error(`Copia corrupta: el movimiento "${orphan.concept}" apunta a una categoría que no existe`)
-  return { merchants: [], rules: [], goals: [], batches: [], decisions: [], settings: DEFAULT_SETTINGS, ...b } as Backup
+  return { merchants: [], rules: [], goals: [], batches: [], decisions: [], scenarios: [], settings: DEFAULT_SETTINGS, ...b } as Backup
 }
 
 /** Sustituye todo por el contenido de la copia. */
 export async function restoreBackup(b: Backup): Promise<void> {
-  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.settings], async () => {
+  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios, db.settings], async () => {
     await clearAll()
     await db.categories.bulkAdd(b.categories)
     await db.movements.bulkAdd(b.movements)
@@ -300,17 +314,18 @@ export async function restoreBackup(b: Backup): Promise<void> {
     await db.goals.bulkAdd(b.goals)
     await db.batches.bulkAdd(b.batches)
     await db.decisions.bulkAdd(b.decisions ?? [])
+    await db.scenarios.bulkAdd(b.scenarios ?? [])
     await db.settings.put({ ...DEFAULT_SETTINGS, ...b.settings, id: 'settings' })
   })
 }
 
 function clearAll() {
-  return Promise.all([db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions].map((t) => t.clear()))
+  return Promise.all([db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios].map((t) => t.clear()))
 }
 
 /** Borra todos los datos (los ajustes se conservan). */
 export async function resetAll(): Promise<void> {
-  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions], clearAll)
+  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios], clearAll)
 }
 
 /** Añade datos de ejemplo a lo que haya (normalmente, nada). */
@@ -452,4 +467,18 @@ export async function decideLeak(id: string, status: LeakStatus, yearlyCost: num
 
 export async function undecideLeak(id: string): Promise<void> {
   await db.decisions.delete(id)
+}
+
+// ── Laboratorio ────────────────────────────────────────────────────────────
+
+/** Guarda un escenario (nuevo si no trae id). Devuelve su id. */
+export async function saveScenario(s: Omit<Scenario, 'id' | 'createdAt'> & { id?: string }): Promise<string> {
+  const id = s.id ?? newId()
+  const prev = s.id ? await db.scenarios.get(s.id) : undefined
+  await db.scenarios.put({ ...s, id, name: s.name.trim() || 'Escenario', createdAt: prev?.createdAt ?? Date.now() })
+  return id
+}
+
+export async function deleteScenario(id: string): Promise<void> {
+  await db.scenarios.delete(id)
 }
