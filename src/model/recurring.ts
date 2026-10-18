@@ -28,6 +28,8 @@ export interface Recurring {
   /** Sigue cobrándose (el próximo cargo no se ha pasado de largo). */
   active: boolean
   priceChanges: PriceChange[]
+  /** Importe fijo (o que cambia por escalones), como una cuota; no un recibo que varía cada vez, como la luz. */
+  fixed: boolean
   /** Coste anual al precio actual. */
   yearly: number
 }
@@ -98,6 +100,8 @@ export function detectRecurring(movements: Movement[], today: ISODate): Recurrin
       if (Math.abs(cur - prev) / prev >= 0.01 && persists && cv < 0.15) priceChanges.push({ date: ms[i].date, from: prev, to: cur })
     }
 
+    const steady = amounts.slice(1).filter((a, i) => Math.abs(a - amounts[i]) / amounts[i] < 0.01).length / (amounts.length - 1)
+
     const last = ms[ms.length - 1]
     const nextDate = addCadence(last.date, c.cadence)
     const amount = Math.abs(last.amount)
@@ -113,6 +117,7 @@ export function detectRecurring(movements: Movement[], today: ISODate): Recurrin
       // Margen de una semana (o de la mitad del periodo en semanales) antes de darlo por cancelado.
       active: toMs(nextDate) + (c.cadence === 'weekly' ? 3 : 10) * DAY >= toMs(today),
       priceChanges,
+      fixed: steady >= 0.6,
       yearly: amount * c.perYear,
     })
   }

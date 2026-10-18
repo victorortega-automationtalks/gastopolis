@@ -10,6 +10,7 @@
 - **Signo de los importes:** gastos negativos, ingresos positivos, transferencias con su signo. Usa `signFor()`; no inventes otra convención.
 - **El tipo pertenece a la categoría.** Si cambias la categoría de un movimiento, usa `recategorize()`/`updateMovement()` del repositorio, que ajustan `kind` y signo.
 - Toda escritura en IndexedDB pasa por `src/data/repo.ts`. Toda lectura en vivo, por `src/data/queries.ts` (tienen test que valida los índices de Dexie: un `orderBy` sobre un campo sin índice rompe la app entera).
+- `Field` envuelve su control en un `<label>`. Si contiene varios controles (chips, casillas, `Segmented`), usa `<Field group>`: un label solo nombra al primero y pulsar en el texto lo activaría.
 - Colores siempre con tokens (`text-ink`, `bg-surface`, `text-expense`…), nunca hex sueltos en componentes. Los colores de categoría usan `.chip-ink` + `--c` para que se lean en tema claro.
 - Escenas 3D: lógica de layout pura en `scenes/<escena>/layout.ts` con tests; el lienzo solo pinta. Instancias con `InstancedMesh` y `key` por número de instancias. **No usar `drei/Html`** para rótulos (crea raíces React y rompe al desmontar): usar la capa DOM proyectada de `CityCanvas`. Pantallas con three.js/recharts se cargan con `lazy()`.
 - Cámara: usar `fitToSphere`, **no `fitToBox`** (camera-controls redondea los ángulos a la cara de la caja y la vista queda de frente). La niebla se ajusta a la distancia de la cámara (`FogRig`).

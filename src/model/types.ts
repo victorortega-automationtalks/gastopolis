@@ -53,6 +53,14 @@ export interface Rule {
   enabled: boolean
 }
 
+export interface GoalContribution {
+  id: string
+  date: ISODate
+  /** Positivo = aportación; negativo = retirada. */
+  amount: number
+  note?: string
+}
+
 export interface Goal {
   id: string
   name: string
@@ -60,8 +68,31 @@ export interface Goal {
   color: string
   target: number
   deadline?: ISODate
+  /** Lo que ya había ahorrado al crear el objetivo. */
+  initial: number
+  /** Desde cuándo cuentan las transferencias de las categorías vinculadas. */
+  startDate: ISODate
+  /**
+   * Categorías de transferencia cuyo dinero apartado va a este objetivo (p. ej. «Ahorro vivienda»).
+   * Una categoría solo puede alimentar un objetivo.
+   */
+  linkedCategoryIds: string[]
+  /** Aportaciones apuntadas a mano. */
+  contributions: GoalContribution[]
   priority: number
   createdAt: number
+  archived?: boolean
+}
+
+export type LeakStatus = 'kept' | 'cancel' | 'ignored'
+
+/** Lo que el usuario decidió sobre una fuga detectada. El id es el de la fuga (estable entre análisis). */
+export interface LeakDecision {
+  id: string
+  status: LeakStatus
+  decidedAt: number
+  /** Coste anual que tenía al decidir (para el «ahorrarías» de lo marcado para cancelar). */
+  yearlyCost: number
 }
 
 export interface ImportBatch {
@@ -82,6 +113,10 @@ export interface Settings {
   fiscalYearStart: number
   theme: ThemeName
   quality: Quality
+  /** Detector de fugas: importe máximo de un «gasto hormiga». */
+  leakAntMax?: number
+  /** Detector de fugas: días entre dos cargos iguales para considerarlos duplicados. */
+  leakDupDays?: number
 }
 
 export interface Backup {
@@ -95,4 +130,5 @@ export interface Backup {
   rules: Rule[]
   goals: Goal[]
   batches: ImportBatch[]
+  decisions?: LeakDecision[]
 }

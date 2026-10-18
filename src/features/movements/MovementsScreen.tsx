@@ -9,6 +9,7 @@ import { fmtDate, fmtPercent } from '../../model/format'
 import type { Movement } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, CategoryChip, Money, Stat } from '../../ui/components/primitives'
+import { offerRule } from '../categories/offerRule'
 import { categoryLabel } from '../categories/tree'
 import { Welcome } from '../onboarding/Welcome'
 
@@ -56,7 +57,11 @@ export function MovementsScreen() {
     const kinds = new Set(selectedRows.map((m) => m.kind))
     const target = catMap.get(categoryId)
     await recategorize([...selected], categoryId)
-    toast(`${selected.size} movimientos → ${target?.name}${target && (kinds.size > 1 || !kinds.has(target.kind)) ? ' (signo ajustado)' : ''}`)
+    const message = `${selected.size} movimientos → ${target?.name}${target && (kinds.size > 1 || !kinds.has(target.kind)) ? ' (signo ajustado)' : ''}`
+    // Si todos son el mismo concepto, ofrecer una regla para que los próximos lleguen ya clasificados.
+    const concepts = new Set(selectedRows.map((m) => m.conceptKey))
+    if (target && concepts.size === 1) offerRule(toast, selectedRows[0].concept, target.id, target.name, message)
+    else toast(message)
     setSelected(new Set())
   }
   const bulkDelete = async () => {

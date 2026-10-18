@@ -81,9 +81,32 @@ export function SettingsScreen() {
         </div>
       </Section>
 
+      <Section title="Detector de fugas" desc="Ajusta qué cuenta como gasto hormiga y cuándo dos cargos iguales se consideran duplicados.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Gasto hormiga: compras de hasta" hint="Cafés, máquinas, chucherías… muchas pequeñas que suman.">
+            <select className="field" value={settings.leakAntMax} onChange={(e) => saveSettings({ leakAntMax: Number(e.target.value) })}>
+              {[3, 5, 8, 10, 15].map((v) => (
+                <option key={v} value={v}>
+                  {v} {settings.currency === 'EUR' ? '€' : settings.currency}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Duplicados: mismo cargo en" hint="Mismo concepto e importe con menos días de diferencia.">
+            <select className="field" value={settings.leakDupDays} onChange={(e) => saveSettings({ leakDupDays: Number(e.target.value) })}>
+              {[0, 1, 2, 3, 5].map((v) => (
+                <option key={v} value={v}>
+                  {v === 0 ? 'el mismo día' : `${v} ${v === 1 ? 'día' : 'días'} o menos`}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </Section>
+
       <Section title="Aspecto">
         <div className="flex flex-wrap items-center gap-6">
-          <Field label="Tema">
+          <Field group label="Tema">
             <Segmented<ThemeName>
               value={settings.theme}
               onChange={(theme) => saveSettings({ theme })}
@@ -94,7 +117,7 @@ export function SettingsScreen() {
               ]}
             />
           </Field>
-          <Field label="Calidad gráfica 3D" hint="«Auto» baja efectos en móviles modestos.">
+          <Field group label="Calidad gráfica 3D" hint="«Auto» baja efectos en móviles modestos.">
             <Segmented<Quality>
               value={settings.quality}
               onChange={(quality) => saveSettings({ quality })}

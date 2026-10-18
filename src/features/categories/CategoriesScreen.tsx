@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useCategories, useMovements, useSettings } from '../../data/hooks'
+import { useCategories, useMovements, useRules, useSettings } from '../../data/hooks'
 import { createCategory, deleteCategory, setCategoryKind, updateCategory } from '../../data/repo'
 import { parseAmount } from '../../import/values'
 import { SWATCHES } from '../../lib/color'
@@ -13,6 +13,7 @@ import { useUI } from '../../store/ui'
 import { Button, Card, Field, Modal, Money, Segmented } from '../../ui/components/primitives'
 import { CategoryIcon } from '../../ui/icons'
 import { CATEGORY_ICONS } from '../../ui/iconRegistry'
+import { RulesPanel } from './RulesPanel'
 import { categoryLabel, flattenTree } from './tree'
 
 interface CatStats {
@@ -21,7 +22,7 @@ interface CatStats {
   months: number
 }
 
-export function CategoriesScreen() {
+function CategoriesList() {
   const categories = useCategories()
   const { movements } = useMovements()
   const toast = useUI((s) => s.toast)
@@ -343,5 +344,32 @@ function DeleteDialog({
         <p className="text-sm text-ink-muted">No tiene movimientos. Sus subcategorías, si las hay, suben un nivel.</p>
       )}
     </Modal>
+  )
+}
+
+/** Categorías y, en otra pestaña, las reglas que clasifican solas. */
+export function CategoriesScreen() {
+  const [tab, setTab] = useState<'categories' | 'rules'>('categories')
+  const rules = useRules()
+  return (
+    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <Segmented<'categories' | 'rules'>
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'categories', label: 'Categorías' },
+          {
+            value: 'rules',
+            label: (
+              <>
+                Reglas <span className="num ml-1 text-ink-faint">{rules.length}</span>
+              </>
+            ),
+          },
+        ]}
+        className="self-start"
+      />
+      {tab === 'categories' ? <CategoriesList /> : <RulesPanel />}
+    </div>
   )
 }

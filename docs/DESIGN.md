@@ -62,12 +62,14 @@ Relieve mes × categoría. Clic en una celda → Ciudad filtrada a ese mes y cat
 **Implementación:** una cresta extruida por categoría (raíz o subcategoría), perfil con interpolación cúbica monótona (pasa por cada mes sin sobrepasarlo ni bajar de cero), la de más importe al fondo para no tapar a las demás, más de 10 se pliegan en «Otras». Rótulo de cada categoría sobre su pico, meses en el borde, cursor del mes al pasar el ratón y barras por mes en el panel.
 
 ### Balanza (fase 3)
-Torres de ingresos y gastos apiladas por categoría, transferencias en el centro, objetivos como torres de cristal. Deslizador temporal mensual o acumulado.
+Torres de ingresos y gastos apiladas por categoría. Deslizador temporal mensual o acumulado. (El tarro de «Apartado» se quitó: estorbaba más de lo que contaba; lo ahorrado vive en Objetivos.)
 
 **Implementación:** balanza física con brazo que se inclina hacia lo que pesa más (raíz de la diferencia relativa, para que un 10 % ya se note), platillos colgados con cadenas y torres apiladas por categoría raíz (más de 7 → «Otras»). Escala fija para todo el periodo, así un mes ligero se ve ligero. Deslizador con reproducción; arranca en el último mes con ingresos. Clic en una franja → Ciudad de esa categoría y mes.
 
 ### Objetivos (fase 4)
 Metas de ahorro («Entrada vivienda · 40.000 € · dic 2029»): aportación mensual necesaria, fecha estimada según tu tasa de ahorro real, adelantado/atrasado, hitos 25/50/75/100 %. Las transferencias a ahorro se asignan a objetivos por regla o reparto porcentual.
+
+**Implementación:** lo ahorrado = inicial + transferencias a las categorías vinculadas desde «Contar lo apartado desde» + aportaciones a mano. Cada categoría alimenta un solo objetivo (sin repartos: más simple y sin dobles cuentas). El ritmo es la media mensual de los últimos 6 meses y cuenta las categorías vinculadas aunque sea antes de crear el objetivo, porque es la costumbre de ahorro; con menos de ~6 semanas de datos el objetivo está «Recién empezado» y no se inventa un ritmo con una aportación suelta. Plantillas (vivienda, colchón con 6 meses de gasto real, coche, viaje), anillo, evolución mensual, hitos con celebración y tarjeta en el Inicio.
 
 ### Detector de fugas (fase 4)
 Motor determinista → `Leak { type, severity, yearlyCost, evidence[], status }`:
@@ -83,6 +85,11 @@ Motor determinista → `Leak { type, severity, yearlyCost, evidence[], status }`
 | Suscripciones solapadas | Dos recurrentes del mismo tipo. |
 
 «Simular cancelación» manda la fuga al Laboratorio.
+
+**Implementación:** `model/leaks.ts`, puro y con ids estables para que las decisiones (la uso / la cancelo / ignorar, en la tabla `decisions`) sobrevivan a cada nuevo análisis. Solo son suscripciones las cuotas **fijas** de hasta 60 €/mes: un recibo que varía cada mes (luz, agua) no se olvida. El gasto hormiga no cuenta las cuotas. Umbrales del gasto hormiga y de los duplicados en Ajustes. Los duplicados se pueden borrar desde la propia fuga, con deshacer.
+
+### Reglas y alta rápida (fase 4)
+Reglas «el concepto contiene / es / cumple la expresión → categoría», con prioridad (gana la primera) y aplicables a lo que ya hay. Respetan el tipo y el signo: una regla de gasto no convierte un ingreso. Se usan al importar y al apuntar a mano; al corregir la categoría de un concepto se ofrece «Siempre así» en el aviso. El alta rápida sugiere la categoría por regla y luego por historial, con atajos a los conceptos más usados.
 
 ### Laboratorio de decisiones (fase 5)
 Palancas (recortar o topar una categoría, cancelar un recurrente, cambio de ingresos, gasto puntual, aportación a objetivo, rentabilidad con interés compuesto, inflación) contra una línea base de tu media real. Proyección a 1/3/5/10 años, «llegas a Vivienda 14 meses antes», escenarios guardados y comparables. Escena 3D «Horizonte»: las proyecciones como cintas que atraviesan los pórticos de los objetivos.
@@ -102,6 +109,6 @@ Tabla virtualizada con orden, filtros globales (periodo, tipo, búsqueda), selec
 1. **Base** — scaffold, modelo, importador, Movimientos, Categorías, Ajustes. ✅
 2. **Ciudad** — treemap 3D con drill-down y panel lateral. ✅
 3. **Cordillera, Balanza, deslizador temporal, Inicio.** ✅
-4. **Alta rápida, reglas, Objetivos, Detector de fugas.**
+4. **Alta rápida, reglas, Objetivos, Detector de fugas.** ✅
 5. **Laboratorio + Horizonte.**
 6. **PWA, APK, CI, rendimiento con 10k movimientos, pulido.**

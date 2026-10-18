@@ -8,6 +8,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fiscalYearStart: 1,
   theme: 'neon',
   quality: 'auto',
+  leakAntMax: 5,
+  leakDupDays: 2,
 }
 
 /** Categorías que, aunque vengan como gasto o ingreso, son dinero que cambia de bolsillo. */

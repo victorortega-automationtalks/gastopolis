@@ -1,5 +1,6 @@
 import { looksLikeTransfer } from '../model/defaults'
-import type { Category, ISODate, Kind, Movement } from '../model/types'
+import { compileRules } from '../model/rules'
+import type { Category, ISODate, Kind, Movement, Rule } from '../model/types'
 import { cleanLabel, normalizeKey, preferredSpelling } from '../lib/text'
 import type { ColumnMap, DetectedTable } from './detect'
 import { headerRole } from './detect'
@@ -28,6 +29,8 @@ export interface PlannedRow {
   /** Número de fila tal como lo vería alguien en Excel (1-based). */
   rowNumber: number
   duplicate: boolean
+  /** Categoría existente que asigna una regla (manda sobre la de la hoja). */
+  ruleCategoryId?: string
 }
 
 export interface SkippedRow {
@@ -54,12 +57,13 @@ export interface ImportPlan {
   rows: PlannedRow[]
   skipped: SkippedRow[]
   categories: PlannedCategory[]
-  stats: { parsed: number; fresh: number; duplicates: number; skipped: number; newCategories: number }
+  stats: { parsed: number; fresh: number; duplicates: number; skipped: number; newCategories: number; ruled: number }
 }
 
 export interface ExistingData {
   movements: Pick<Movement, 'date' | 'amount' | 'conceptKey'>[]
   categories: Pick<Category, 'id' | 'name' | 'kind'>[]
+  rules?: Rule[]
 }
 
 export const NO_CATEGORY = 'Sin categoría'
@@ -111,13 +115,17 @@ export function buildPlan(source: SourceFile, tables: TableConfig[], existing: E
     }
   }
 
+  // Reglas: un concepto conocido va a su categoría aunque la hoja diga otra (Repsol → Gasolina).
+  const compiled = compileRules(existing.rules ?? [], existing.categories)
+  for (const r of rows) r.ruleCategoryId = compiled.categoryFor(r.concept, r.sourceKind, r.amount)
+
   const existingByIdentity = new Map(existing.categories.map((c) => [categoryIdentity(c.kind, c.name), c.id]))
   const categories: PlannedCategory[] = []
   for (const [sourceKey, names] of catNames) {
     const sourceKind = sourceKey.split('|')[0] as Kind
     const name = preferredSpelling(names)
     const kind = kindOverrides[sourceKey] ?? (looksLikeTransfer(name) ? 'transfer' : sourceKind)
-    const fresh = rows.filter((r) => r.categorySourceKey === sourceKey && !r.duplicate)
+    const fresh = rows.filter((r) => r.categorySourceKey === sourceKey && !r.duplicate && !r.ruleCategoryId)
     categories.push({
       sourceKey,
       name,
@@ -138,7 +146,14 @@ export function buildPlan(source: SourceFile, tables: TableConfig[], existing: E
     rows,
     skipped,
     categories,
-    stats: { parsed: rows.length, fresh: rows.length - duplicates, duplicates, skipped: skipped.length, newCategories: newIdentities.size },
+    stats: {
+      parsed: rows.length,
+      fresh: rows.length - duplicates,
+      duplicates,
+      skipped: skipped.length,
+      newCategories: newIdentities.size,
+      ruled: rows.filter((r) => r.ruleCategoryId && !r.duplicate).length,
+    },
   }
 }
 

@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { X } from 'lucide-react'
-import { useEffect, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useId, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useSettings } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
@@ -171,13 +171,45 @@ export function Modal({
   )
 }
 
-export function Field({ label, hint, children, className }: { label: string; hint?: ReactNode; children: ReactNode; className?: string }) {
-  return (
-    <label className={clsx('block', className)}>
-      <span className="mb-1.5 block text-xs font-medium text-ink-muted">{label}</span>
+/**
+ * Etiqueta + control. Con `group`, para varios controles (chips, casillas, botones segmentados): un `<label>` solo
+ * nombra a su primer control y pulsar en el texto lo activaría.
+ */
+export function Field({
+  label,
+  hint,
+  children,
+  className,
+  group,
+}: {
+  label: string
+  hint?: ReactNode
+  children: ReactNode
+  className?: string
+  group?: boolean
+}) {
+  const id = useId()
+  const title = (
+    <span id={id} className="mb-1.5 block text-xs font-medium text-ink-muted">
+      {label}
+    </span>
+  )
+  // La pista va fuera del <label> para no alargar el nombre del control (y porque puede llevar botones).
+  const tip = hint && <span className="mt-1 block text-xs text-ink-faint">{hint}</span>
+  return group ? (
+    <div role="group" aria-labelledby={id} className={className}>
+      {title}
       {children}
-      {hint && <span className="mt-1 block text-xs text-ink-faint">{hint}</span>}
-    </label>
+      {tip}
+    </div>
+  ) : (
+    <div className={className}>
+      <label className="block">
+        {title}
+        {children}
+      </label>
+      {tip}
+    </div>
   )
 }
 
