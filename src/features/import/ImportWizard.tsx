@@ -62,7 +62,7 @@ export function ImportWizard() {
       const r = await applyImport(plan)
       toast(`Importados ${r.movements} movimientos${r.categories ? ` y ${r.categories} categorías nuevas` : ''}`)
       close()
-      navigate('movimientos')
+      navigate('inicio')
     } catch (e) {
       setError(`Falló la importación: ${(e as Error).message}`)
     } finally {

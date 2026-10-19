@@ -13,6 +13,9 @@ import { CURRENT_PHASE, navItem } from './ui/nav'
 
 // Las escenas (three.js, recharts) van en su propio chunk: la primera carga solo trae lo básico.
 const CityScreen = lazy(() => import('./features/city/CityScreen').then((m) => ({ default: m.CityScreen })))
+const RidgeScreen = lazy(() => import('./features/ridge/RidgeScreen').then((m) => ({ default: m.RidgeScreen })))
+const BalanceScreen = lazy(() => import('./features/balance/BalanceScreen').then((m) => ({ default: m.BalanceScreen })))
+const DashboardScreen = lazy(() => import('./features/dashboard/DashboardScreen').then((m) => ({ default: m.DashboardScreen })))
 
 function Loading() {
   return (
@@ -40,10 +43,28 @@ function useTheme() {
 
 function Screen({ route }: { route: Route }) {
   switch (route) {
+    case 'inicio':
+      return (
+        <Suspense fallback={<Loading />}>
+          <DashboardScreen />
+        </Suspense>
+      )
     case 'ciudad':
       return (
         <Suspense fallback={<Loading />}>
           <CityScreen />
+        </Suspense>
+      )
+    case 'cordillera':
+      return (
+        <Suspense fallback={<Loading />}>
+          <RidgeScreen />
+        </Suspense>
+      )
+    case 'balanza':
+      return (
+        <Suspense fallback={<Loading />}>
+          <BalanceScreen />
         </Suspense>
       )
     case 'movimientos':

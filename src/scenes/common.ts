@@ -20,6 +20,9 @@ export interface SceneColors {
   line: string
   accent: string
   accent2: string
+  income: string
+  expense: string
+  transfer: string
   dark: boolean
 }
 
@@ -33,6 +36,9 @@ function read(): SceneColors {
     line: v('--line-strong') || '#333',
     accent: v('--accent') || '#8b5cf6',
     accent2: v('--accent-2') || '#22d3ee',
+    income: v('--income') || '#34d399',
+    expense: v('--expense') || '#fb7185',
+    transfer: v('--transfer') || '#fbbf24',
     dark: document.documentElement.dataset.theme !== 'polar',
   }
 }
