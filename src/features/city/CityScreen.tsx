@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { ChevronRight, ChevronUp, Crosshair, Home, MousePointerClick, Play, SlidersHorizontal } from 'lucide-react'
+import { Building2, ChevronRight, ChevronUp, Crosshair, Home, LayoutGrid, MousePointerClick, Play, SlidersHorizontal } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCategories, useCategoryMap, useMovements, useSettings } from '../../data/hooks'
 import { applyFilters } from '../../model/aggregate'
@@ -17,6 +17,7 @@ import { Button, Segmented } from '../../ui/components/primitives'
 import { TimePlayer } from '../../ui/TimePlayer'
 import { useTimeline } from '../../ui/useTimeline'
 import { CityPanel } from './CityPanel'
+import { DirStatView } from './DirStatView'
 
 // three.js y compañía solo se descargan al abrir una escena.
 const CityCanvas = lazy(() => import('../../scenes/city/CityCanvas').then((m) => ({ default: m.CityCanvas })))
@@ -103,6 +104,92 @@ export function CityScreen() {
       ? `Haz clic en un barrio para ver sus ${nextType === 'movement' ? 'movimientos' : nextType === 'month' ? 'meses' : nextType === 'category' ? 'subcategorías' : 'conceptos'}`
       : 'Haz clic en un edificio para ver su detalle'
 
+  const breadcrumb = (
+    <nav className="glass pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-xl px-1.5 py-1 text-sm">
+      {trail.map((n, i) => (
+        <span key={n.id} className="flex items-center">
+          {i > 0 && <ChevronRight size={14} className="mx-0.5 shrink-0 text-ink-faint" />}
+          <button
+            onClick={() => city.setPath(trail.slice(1, i + 1).map((t) => t.id))}
+            className={clsx(
+              'flex items-center gap-1.5 rounded-md px-2 py-1 whitespace-nowrap transition',
+              i === trail.length - 1 ? 'font-semibold text-ink' : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
+            )}
+          >
+            {i === 0 ? <Home size={14} /> : <span className="h-2 w-2 rounded-full" style={{ background: n.color }} />}
+            {n.label}
+          </button>
+        </span>
+      ))}
+      <span className="num ml-2 pr-2 text-xs whitespace-nowrap text-ink-muted">
+        {fmtMoney(view.value, { currency: settings.currency, locale: settings.locale })}
+      </span>
+    </nav>
+  )
+  const modeToggle = (
+    <Segmented<'city' | 'dirstat'>
+      value={city.mode}
+      onChange={(mode) => city.setPrefs({ mode })}
+      options={[
+        {
+          value: 'city',
+          label: (
+            <span className="flex items-center gap-1.5">
+              <Building2 size={14} /> Ciudad 3D
+            </span>
+          ),
+        },
+        {
+          value: 'dirstat',
+          label: (
+            <span className="flex items-center gap-1.5">
+              <LayoutGrid size={14} /> WinDirStat
+            </span>
+          ),
+        },
+      ]}
+      className="glass"
+    />
+  )
+  const kindToggle = (
+    <Segmented<Kind>
+      value={city.kind}
+      onChange={(kind) => city.setPrefs({ kind })}
+      options={KINDS.map((k) => ({ value: k, label: KIND_LABEL_PLURAL[k] }))}
+      className="glass"
+    />
+  )
+
+  if (city.mode === 'dirstat')
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+          {breadcrumb}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {modeToggle}
+            {kindToggle}
+            <select className="field h-9 w-auto" value={city.preset} onChange={(e) => city.setPrefs({ preset: e.target.value })} aria-label="Agrupar por">
+              {DRILL_PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {empty ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <p className="font-display text-xl font-semibold">No hay {KIND_LABEL_PLURAL[city.kind].toLowerCase()} con estos filtros</p>
+            <Button onClick={resetFilters}>Quitar filtros</Button>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 pb-16 md:pb-0">
+            <DirStatView view={view} onZoom={enter} onOpenMovement={editMovement} />
+          </div>
+        )}
+      </div>
+    )
+
   return (
     <div className="flex h-full min-h-0 flex-col lg:flex-row">
       <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -133,33 +220,10 @@ export function CityScreen() {
 
         {/* Barra superior sobre el lienzo */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start gap-2 p-3">
-          <nav className="glass pointer-events-auto flex max-w-full items-center gap-0.5 overflow-x-auto rounded-xl px-1.5 py-1 text-sm">
-            {trail.map((n, i) => (
-              <span key={n.id} className="flex items-center">
-                {i > 0 && <ChevronRight size={14} className="mx-0.5 shrink-0 text-ink-faint" />}
-                <button
-                  onClick={() => city.setPath(trail.slice(1, i + 1).map((t) => t.id))}
-                  className={clsx(
-                    'flex items-center gap-1.5 rounded-md px-2 py-1 whitespace-nowrap transition',
-                    i === trail.length - 1 ? 'font-semibold text-ink' : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
-                  )}
-                >
-                  {i === 0 ? <Home size={14} /> : <span className="h-2 w-2 rounded-full" style={{ background: n.color }} />}
-                  {n.label}
-                </button>
-              </span>
-            ))}
-            <span className="num ml-2 pr-2 text-xs whitespace-nowrap text-ink-muted">
-              {fmtMoney(view.value, { currency: settings.currency, locale: settings.locale })}
-            </span>
-          </nav>
+          {breadcrumb}
           <div className="pointer-events-auto ml-auto flex flex-wrap items-center justify-end gap-2">
-            <Segmented<Kind>
-              value={city.kind}
-              onChange={(kind) => city.setPrefs({ kind })}
-              options={KINDS.map((k) => ({ value: k, label: KIND_LABEL_PLURAL[k] }))}
-              className="glass"
-            />
+            {modeToggle}
+            {kindToggle}
             <ViewOptions />
             <Button
               variant="subtle"

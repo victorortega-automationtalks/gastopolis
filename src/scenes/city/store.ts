@@ -4,6 +4,8 @@ import type { Kind } from '../../model/types'
 import type { ColorBy, HeightBy } from './layout'
 
 interface CityPrefs {
+  /** Ciudad 3D o vista WinDirStat (árbol + treemap con relieve). */
+  mode: 'city' | 'dirstat'
   kind: Kind
   preset: string
   heightBy: HeightBy
@@ -26,6 +28,7 @@ interface CityState extends CityPrefs {
 export const useCity = create<CityState>()(
   persist(
     (set) => ({
+      mode: 'city',
       kind: 'expense',
       preset: 'cat-concept',
       heightBy: 'count',
@@ -47,7 +50,7 @@ export const useCity = create<CityState>()(
     {
       name: 'gastopolis.city',
       storage: createJSONStorage(() => localStorage),
-      partialize: ({ kind, preset, heightBy, colorBy, depth }) => ({ kind, preset, heightBy, colorBy, depth }),
+      partialize: ({ mode, kind, preset, heightBy, colorBy, depth }) => ({ mode, kind, preset, heightBy, colorBy, depth }),
     },
   ),
 )
