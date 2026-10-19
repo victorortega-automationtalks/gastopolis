@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { AlertTriangle, Banknote, KeyRound, Landmark, Plus, RefreshCw, Gamepad2, Trash2, Wallet, Wand2, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Banknote, KeyRound, Landmark, Plus, RefreshCw, Gamepad2, Pencil, Trash2, Wallet, Wand2, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { bankEnabled, syncAccounts, syncAccount } from '../../bank/run'
 import { consentState, manualSync, MIN_AUTO_HOURS } from '../../bank/sync'
@@ -256,7 +256,7 @@ function BankRow({ account: a, now, stats, onRenew }: { account: Account; now: n
       <div className="flex flex-wrap items-center gap-3">
         <Landmark size={18} className="shrink-0" style={{ color: a.color }} />
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-ink">{a.name}</div>
+          <AccountName account={a} />
           <div className="num text-xs text-ink-faint">
             {bank.aspsp.name}
             {bank.ibanMasked && ` · ${bank.ibanMasked}`} · {stats?.n ?? 0} movimientos
@@ -307,17 +307,60 @@ function BankRow({ account: a, now, stats, onRenew }: { account: Account; now: n
   )
 }
 
+/** Nombre de una cuenta, con un lápiz para renombrarla: Intro guarda, Esc cancela. */
+function AccountName({ account: a }: { account: Account }) {
+  const toast = useUI((s) => s.toast)
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(a.name)
+  const save = async () => {
+    const next = name.trim()
+    setEditing(false)
+    if (!next || next === a.name) return setName(a.name)
+    await updateAccount(a.id, { name: next })
+    toast(`Cuenta renombrada: «${next}»`)
+  }
+  if (editing)
+    return (
+      <input
+        autoFocus
+        className="field h-8 max-w-72 py-0 font-medium"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') {
+            setName(a.name)
+            setEditing(false)
+          }
+        }}
+        aria-label="Nombre de la cuenta"
+      />
+    )
+  return (
+    <button
+      className="group flex max-w-full items-center gap-1.5 rounded-md text-left font-medium text-ink"
+      onClick={() => {
+        setName(a.name)
+        setEditing(true)
+      }}
+      title="Renombrar"
+      aria-label={`Renombrar ${a.name}`}
+    >
+      <span className="truncate">{a.name}</span>
+      <Pencil size={13} className="shrink-0 text-ink-faint transition group-hover:text-ink" />
+    </button>
+  )
+}
+
 function AccountRow({ account: a, stats }: { account: Account; stats?: { n: number; net: number } }) {
   const Icon = KIND_ICON[a.kind]
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
       <Icon size={18} className="shrink-0" style={{ color: a.color }} />
-      <input
-        className="min-w-32 flex-1 bg-transparent font-medium text-ink outline-none"
-        defaultValue={a.name}
-        aria-label="Nombre de la cuenta"
-        onBlur={(e) => e.target.value.trim() && e.target.value !== a.name && void updateAccount(a.id, { name: e.target.value.trim() })}
-      />
+      <div className="min-w-32 flex-1">
+        <AccountName account={a} />
+      </div>
       <span className="text-xs text-ink-faint">
         {KIND_LABEL[a.kind]} · {stats?.n ?? 0} movimientos
       </span>
