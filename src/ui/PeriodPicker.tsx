@@ -45,7 +45,10 @@ export function PeriodPicker() {
                   set({ preset: x.preset })
                   setOpen(false)
                 }}
-                className={clsx('rounded-md px-2.5 py-1.5 text-left text-sm transition hover:bg-surface-2', period.preset === x.preset && 'bg-accent/15 text-ink ring-1 ring-accent/40')}
+                className={clsx(
+                  'rounded-md px-2.5 py-1.5 text-left text-sm transition hover:bg-surface-2',
+                  period.preset === x.preset && 'bg-accent/15 text-ink ring-1 ring-accent/40',
+                )}
               >
                 {x.label}
               </button>
@@ -62,7 +65,10 @@ export function PeriodPicker() {
                       set({ preset: 'year', year: y })
                       setOpen(false)
                     }}
-                    className={clsx('num rounded-md px-2.5 py-1 text-sm transition hover:bg-surface-2', period.preset === 'year' && period.year === y && 'bg-accent/15 ring-1 ring-accent/40')}
+                    className={clsx(
+                      'num rounded-md px-2.5 py-1 text-sm transition hover:bg-surface-2',
+                      period.preset === 'year' && period.year === y && 'bg-accent/15 ring-1 ring-accent/40',
+                    )}
                   >
                     {y}
                   </button>

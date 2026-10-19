@@ -11,7 +11,21 @@ export const DEFAULT_SETTINGS: Settings = {
 }
 
 /** Categorías que, aunque vengan como gasto o ingreso, son dinero que cambia de bolsillo. */
-const TRANSFER_WORDS = ['ahorro', 'ahorros', 'cryptos', 'crypto', 'criptos', 'cripto', 'inversion', 'inversiones', 'traspaso', 'transferencia propia', 'fondo', 'fondos', 'bolsa']
+const TRANSFER_WORDS = [
+  'ahorro',
+  'ahorros',
+  'cryptos',
+  'crypto',
+  'criptos',
+  'cripto',
+  'inversion',
+  'inversiones',
+  'traspaso',
+  'transferencia propia',
+  'fondo',
+  'fondos',
+  'bolsa',
+]
 
 export function looksLikeTransfer(categoryName: string): boolean {
   const k = normalizeKey(categoryName)

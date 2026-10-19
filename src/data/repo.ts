@@ -38,7 +38,15 @@ export async function applyImport(plan: ImportPlan): Promise<ImportResult> {
       const identity = categoryIdentity(pc.kind, pc.name)
       let cat = byIdentity.get(identity)
       if (!cat) {
-        cat = { id: newId(), name: pc.name, kind: pc.kind, parentId: null, color: paletteColor(colorIndex++), icon: guessIcon(pc.name, pc.kind), order: order++ }
+        cat = {
+          id: newId(),
+          name: pc.name,
+          kind: pc.kind,
+          parentId: null,
+          color: paletteColor(colorIndex++),
+          icon: guessIcon(pc.name, pc.kind),
+          order: order++,
+        }
         byIdentity.set(identity, cat)
         created.push(cat)
       }
@@ -136,7 +144,9 @@ export async function recategorize(ids: string[], categoryId: string): Promise<v
     if (!cat) throw new Error('Categoría inexistente')
     const ms = await db.movements.bulkGet(ids)
     await db.movements.bulkPut(
-      ms.filter((m): m is Movement => !!m).map((m) => ({ ...m, categoryId, kind: cat.kind, amount: m.kind === cat.kind ? m.amount : signFor(cat.kind, m.amount) })),
+      ms
+        .filter((m): m is Movement => !!m)
+        .map((m) => ({ ...m, categoryId, kind: cat.kind, amount: m.kind === cat.kind ? m.amount : signFor(cat.kind, m.amount) })),
     )
   })
 }
@@ -194,7 +204,10 @@ export async function createCategory(input: { name: string; kind: Kind; parentId
   return id
 }
 
-export async function updateCategory(id: string, patch: Partial<Pick<Category, 'name' | 'color' | 'icon' | 'budgetMonthly' | 'parentId' | 'order'>>): Promise<void> {
+export async function updateCategory(
+  id: string,
+  patch: Partial<Pick<Category, 'name' | 'color' | 'icon' | 'budgetMonthly' | 'parentId' | 'order'>>,
+): Promise<void> {
   if (patch.parentId) {
     // Evita ciclos: el nuevo padre no puede ser la propia categoría ni una descendiente.
     const all = await db.categories.toArray()

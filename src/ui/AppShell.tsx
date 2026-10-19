@@ -75,7 +75,10 @@ function KindToggles() {
         <button
           key={k}
           onClick={() => toggle(k)}
-          className={clsx('flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition', kinds.includes(k) ? 'bg-surface-2 text-ink' : 'text-ink-faint')}
+          className={clsx(
+            'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+            kinds.includes(k) ? 'bg-surface-2 text-ink' : 'text-ink-faint',
+          )}
           title={KIND_LABEL_PLURAL[k]}
         >
           <span className={clsx('h-2 w-2 rounded-full transition', dot[k], !kinds.includes(k) && 'opacity-25')} />
@@ -94,7 +97,11 @@ function SearchBox() {
       <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint" />
       <input value={search} onChange={(e) => setFilters({ search: e.target.value })} placeholder="Buscar concepto, categoría…" className="field h-9 pl-9" />
       {search && (
-        <button onClick={() => setFilters({ search: '' })} className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-ink-faint hover:text-ink" aria-label="Limpiar búsqueda">
+        <button
+          onClick={() => setFilters({ search: '' })}
+          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-ink-faint hover:text-ink"
+          aria-label="Limpiar búsqueda"
+        >
           <X size={14} />
         </button>
       )}
@@ -128,7 +135,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
       {item.filters && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <PeriodPicker />
-          <KindToggles />
+          {!item.scene && <KindToggles />}
           <SearchBox />
         </div>
       )}
@@ -146,7 +153,11 @@ function BottomNav({ onMore }: { onMore: () => void }) {
         const it = navItem(r)
         const Icon = it.icon
         return (
-          <button key={r} onClick={() => navigate(r)} className={clsx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px]', current === r ? 'text-accent-2' : 'text-ink-faint')}>
+          <button
+            key={r}
+            onClick={() => navigate(r)}
+            className={clsx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px]', current === r ? 'text-accent-2' : 'text-ink-faint')}
+          >
             <Icon size={20} />
             {it.label}
           </button>
@@ -193,6 +204,7 @@ function Toasts() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState(false)
+  const scene = navItem(useUI((s) => s.route)).scene
   return (
     <div className="flex h-full">
       <aside className="hidden w-60 shrink-0 flex-col gap-6 border-r border-line bg-canvas-2/40 p-4 md:flex">
@@ -212,11 +224,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onMenu={() => setDrawer(true)} />
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 pb-24 sm:px-6 md:pb-8">{children}</main>
+        <main className={clsx('min-h-0 flex-1', scene ? 'relative overflow-hidden' : 'overflow-y-auto px-4 py-5 pb-24 sm:px-6 md:pb-8')}>{children}</main>
       </div>
       <BottomNav onMore={() => setDrawer(true)} />
       <Toasts />
     </div>
   )
 }
-

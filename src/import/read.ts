@@ -54,9 +54,7 @@ export function parseDelimited(text: string): Cell[][] {
   const sample = text.split(/\r?\n/).slice(0, 20)
   const candidates = [';', ',', '\t', '|']
   const delim =
-    candidates
-      .map((d) => ({ d, score: sample.reduce((acc, line) => acc + line.split(d).length - 1, 0) }))
-      .sort((a, b) => b.score - a.score)[0]?.d ?? ','
+    candidates.map((d) => ({ d, score: sample.reduce((acc, line) => acc + line.split(d).length - 1, 0) })).sort((a, b) => b.score - a.score)[0]?.d ?? ','
 
   const rows: Cell[][] = []
   let row: Cell[] = []

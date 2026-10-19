@@ -39,7 +39,8 @@ export function MovementsScreen() {
   const selectedRows = useMemo(() => filtered.filter((m) => selected.has(m.id)), [filtered, selected])
   const selTotal = selectedRows.reduce((a, m) => a + m.amount, 0)
 
-  const toggleSort = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: key === 'date' || key === 'amount' ? -1 : 1 }))
+  const toggleSort = (key: SortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: key === 'date' || key === 'amount' ? -1 : 1 }))
   const toggle = (id: string) =>
     setSelected((s) => {
       const n = new Set(s)
@@ -138,7 +139,14 @@ function MovementTable({
   const v = useVirtualizer({ count: rows.length, getScrollElement: () => parent.current, estimateSize: () => 52, overscan: 12 })
 
   const Head = ({ k, children, className }: { k: SortKey; children: string; className?: string }) => (
-    <button onClick={() => onSort(k)} className={clsx('flex items-center gap-1 text-[11px] font-medium tracking-wider uppercase hover:text-ink', className, sort.key === k ? 'text-ink' : 'text-ink-faint')}>
+    <button
+      onClick={() => onSort(k)}
+      className={clsx(
+        'flex items-center gap-1 text-[11px] font-medium tracking-wider uppercase hover:text-ink',
+        className,
+        sort.key === k ? 'text-ink' : 'text-ink-faint',
+      )}
+    >
       {children}
       {sort.key === k && (sort.dir === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
     </button>
@@ -233,7 +241,10 @@ function Welcome() {
           <div className="font-display font-semibold">Ver con datos de ejemplo</div>
           <p className="mt-1 text-sm text-ink-muted">18 meses inventados para curiosear. Se quitan con un botón.</p>
         </button>
-        <button onClick={() => void createStarterCategories().then(() => editMovement(''))} className="glass group rounded-2xl p-5 text-left transition hover:border-income/50">
+        <button
+          onClick={() => void createStarterCategories().then(() => editMovement(''))}
+          className="glass group rounded-2xl p-5 text-left transition hover:border-income/50"
+        >
           <div className="font-display font-semibold">Empezar en blanco</div>
           <p className="mt-1 text-sm text-ink-muted">Te dejo unas categorías básicas y apuntas movimientos a mano.</p>
         </button>
