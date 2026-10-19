@@ -9,7 +9,11 @@ import type { Category, Kind, Movement, Rule } from './types'
  */
 
 /** Palabras de relleno al principio de los conceptos del banco: no sirven para reconocer al comercio. */
-const LEADING = new Set('compra compras en pago pagos www com at cargo recibo adeudo tarj tarjeta trf transf de del la el los las e s sp p n'.split(' '))
+const LEADING = new Set(
+  'compra compras en pago pagos www com at devolucion devoluciones abono reembolso refund cargo recibo adeudo tarj tarjeta trf transf de del la el los las e s sp p n'.split(
+    ' ',
+  ),
+)
 /** Primeras palabras demasiado genéricas para ir solas: se añade la siguiente («hotel at» no, «consulta psicologia» sí). */
 const VAGUE = new Set(
   'real hotel hostal consulta viajes clinica clin farmacia restaurante bar cafeteria taberna tienda tiendas super supermercado gasolinera estacion banco dinero gasto interno interna trans traspaso'.split(

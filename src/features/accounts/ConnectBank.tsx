@@ -280,7 +280,7 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
               <p key={o.account} className={o.error ? 'text-danger' : 'text-ink'}>
                 <b>{o.account}</b>:{' '}
                 {o.error ??
-                  `${o.added} nuevos${o.linked ? `, ${o.linked} que ya tenías enlazados` : ''}${o.transfers ? `, ${o.transfers} traspasos entre tus cuentas` : ''}`}
+                  `${o.added} nuevos${o.linked ? `, ${o.linked} que ya tenías enlazados` : ''}${o.transfers ? `, ${o.transfers} traspasos entre tus cuentas` : ''}${o.refunds ? `, ${o.refunds} compras devueltas` : ''}`}
               </p>
             ))
           )}

@@ -5,6 +5,7 @@ import { DEFAULT_FILTERS, type Filters } from '../model/period'
 export type Route =
   | 'inicio'
   | 'ciudad'
+  | 'calendario'
   | 'cordillera'
   | 'balanza'
   | 'rio'
@@ -21,6 +22,7 @@ export type Route =
 export const ROUTES: Route[] = [
   'inicio',
   'ciudad',
+  'calendario',
   'cordillera',
   'balanza',
   'rio',
@@ -53,12 +55,14 @@ interface UIState {
   importOpen: boolean
   /** null = cerrado; '' = nuevo; id = editar. */
   editing: string | null
+  /** Fecha con la que abrir un movimiento nuevo (p. ej. desde un día del calendario). */
+  draftDate: string | null
   toasts: Toast[]
   navigate: (r: Route) => void
   setFilters: (patch: Partial<Filters>) => void
   resetFilters: () => void
   openImport: (open: boolean) => void
-  editMovement: (id: string | null) => void
+  editMovement: (id: string | null, opts?: { date?: string }) => void
   toast: (text: string, tone?: Toast['tone'], action?: Toast['action']) => void
   dismissToast: (id: number) => void
   /** Palanca que otra pantalla manda al Laboratorio (p. ej., «Simular» una suscripción desde Fugas). */
@@ -74,6 +78,7 @@ export const useUI = create<UIState>((set, get) => ({
   filters: DEFAULT_FILTERS,
   importOpen: false,
   editing: null,
+  draftDate: null,
   toasts: [],
   navigate: (route) => {
     if (location.hash !== `#/${route}`) location.hash = `/${route}`
@@ -82,7 +87,7 @@ export const useUI = create<UIState>((set, get) => ({
   setFilters: (patch) => set({ filters: { ...get().filters, ...patch } }),
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
   openImport: (importOpen) => set({ importOpen }),
-  editMovement: (editing) => set({ editing }),
+  editMovement: (editing, opts) => set({ editing, draftDate: opts?.date ?? null }),
   toast: (text, tone = 'ok', action) => {
     const id = ++toastSeq
     set({ toasts: [...get().toasts, { id, text, tone, action }] })

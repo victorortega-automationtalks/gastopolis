@@ -3,6 +3,7 @@ import { newId } from '../lib/id'
 import { normalizeKey } from '../lib/text'
 import { signFor } from '../model/aggregate'
 import { findCategory, type AutoCategory, type AutoGroup } from '../model/autocat'
+import { REFUND_CATEGORY } from '../model/refunds'
 import { DEFAULT_SETTINGS, guessIcon } from '../model/defaults'
 import { previewRules } from '../model/rules'
 import type {
@@ -587,6 +588,20 @@ export async function applyAutoAssign(groups: Pick<AutoGroup, 'auto' | 'ids'>[])
     n += g.ids.length
   }
   return n
+}
+
+/**
+ * Compras devueltas: la compra y su devolución pasan a «Compras devueltas» (traspaso, cada una con su signo), así se
+ * anulan y no cuentan como gasto ni como ingreso.
+ */
+export async function markRefunds(pairs: [string, string][]): Promise<number> {
+  if (!pairs.length) return 0
+  const categoryId = await ensureCategory(REFUND_CATEGORY, 'transfer')
+  await db.transaction('rw', db.movements, async () => {
+    const ms = (await db.movements.bulkGet(pairs.flat())).filter((m): m is Movement => !!m)
+    await db.movements.bulkPut(ms.map((m) => ({ ...m, categoryId, kind: 'transfer' as const })))
+  })
+  return pairs.length
 }
 
 export const BANK_CATEGORIES = {

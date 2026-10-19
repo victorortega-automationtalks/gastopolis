@@ -1,5 +1,6 @@
 import {
   Building2,
+  CalendarDays,
   Compass,
   FileText,
   FlaskConical,
@@ -49,6 +50,15 @@ export const NAV: NavItem[] = [
     phase: 2,
     filters: true,
     blurb: 'Treemap 3D: cada bloque es un gasto. Haz clic para entrar y ver el detalle, como WinDirStat.',
+  },
+  {
+    route: 'calendario',
+    label: 'Calendario',
+    icon: CalendarDays,
+    phase: 8,
+    // Tiene su propio selector de mes.
+    filters: false,
+    blurb: 'El mes día a día: lo gastado e ingresado cada día, los días sin gastar y la semana sumada. Pulsa un día para entrar.',
   },
   {
     route: 'cordillera',
@@ -130,7 +140,7 @@ export const NAV: NavItem[] = [
 ]
 
 /** Las cuatro vistas para explorar el dinero: en el menú son una sola entrada, «Explorar», con pestañas arriba. */
-export const EXPLORE_ROUTES: Route[] = ['ciudad', 'cordillera', 'balanza', 'rio']
+export const EXPLORE_ROUTES: Route[] = ['ciudad', 'calendario', 'cordillera', 'balanza', 'rio']
 
 /**
  * Menú: lo de cada día arriba (y Explorar como una sola entrada), lo de planificar debajo y lo que se configura de vez

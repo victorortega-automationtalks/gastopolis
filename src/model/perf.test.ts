@@ -40,7 +40,7 @@ const time = <T>(name: string, fn: () => T): T => {
 describe('rendimiento con 12.000 movimientos', () => {
   it('cada cálculo de pantalla tarda poco', () => {
     expect(movements.length).toBeGreaterThan(11000)
-    const all = time('filtros', () => applyFilters(movements, DEFAULT_FILTERS, categories, asOf))
+    const all = time('filtros', () => applyFilters(movements, { ...DEFAULT_FILTERS, period: { preset: 'all' } }, categories, asOf))
     const expenses = all.filter((m) => m.kind === 'expense')
     const root = time('jerarquía de la Ciudad', () => buildHierarchy(expenses, categories, ['category', 'concept'], 'Gastos'))
     time('WinDirStat: treemap con relieve (1600×500, ×2)', () => {

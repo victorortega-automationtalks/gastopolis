@@ -1,9 +1,10 @@
 import { db } from '../data/db'
-import { applyBankSync, bankFallbacks, createAccount, ensureAutoCategory, updateBankLink } from '../data/repo'
+import { applyBankSync, bankFallbacks, createAccount, ensureAutoCategory, markRefunds, updateBankLink } from '../data/repo'
 import { errorMessage } from '../lib/errors'
 import { newId } from '../lib/id'
 import { autoContext, classify } from '../model/autocat'
 import { isoOf } from '../model/period'
+import { refundPairs, REFUND_DAYS } from '../model/refunds'
 import { compileRules } from '../model/rules'
 import type { BankLink, BankSecret, Movement } from '../model/types'
 import { bankAuthWindow, bankRequest, bankSupported, openExternal } from '../platform'
@@ -69,6 +70,8 @@ export interface SyncOutcome {
   added: number
   linked: number
   transfers: number
+  /** Compras que han resultado devueltas (compra y devolución se anulan). */
+  refunds?: number
   error?: string
 }
 
@@ -125,7 +128,13 @@ export async function syncAccount(accountId: string, opts: { manual?: boolean } 
       { pairs, categoryId: fallback.transfer },
       { lastSyncAt: Date.now(), syncedThrough: range.dateTo, lastError: undefined, balance, ...manual },
     )
-    return { account: account.name, added: plan.added.length, linked: plan.linked.length, transfers: pairs.length }
+    // Devoluciones: si lo que entra ahora es la devolución de una compra (o al revés), las dos se anulan.
+    const since = new Date(Date.parse(range.dateFrom) - REFUND_DAYS * 86_400_000).toISOString().slice(0, 10)
+    const inPair = new Set(pairs.flat())
+    const window = [...existing.filter((m) => m.date >= since), ...plan.added].filter((m) => !inPair.has(m.id))
+    const refunds = refundPairs(window).filter(([a, b]) => added.has(a) || added.has(b))
+    await markRefunds(refunds)
+    return { account: account.name, added: plan.added.length, linked: plan.linked.length, transfers: pairs.length, refunds: refunds.length }
   } catch (e) {
     const expired = e instanceof EbError && e.expired
     await updateBankLink(accountId, { lastError: errorMessage(e), ...manual, ...(expired ? { validUntil: new Date().toISOString() } : {}) })

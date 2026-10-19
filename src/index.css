@@ -126,6 +126,22 @@ body {
   }
 }
 
+/* Modo WinDirStat: los colores son los de WinDirStat (en el lienzo); el resto, los del tema de la app. */
+.dirstat {
+  --ds-bg: var(--surface-solid);
+  --ds-face: var(--surface-solid);
+  --ds-line: var(--line);
+  --ds-line-strong: var(--line-strong);
+  --ds-ink: var(--ink);
+  --ds-muted: var(--ink-muted);
+  --ds-faint: var(--ink-faint);
+  --ds-sel: color-mix(in oklab, var(--accent) 35%, transparent);
+  --ds-sel-ink: var(--ink);
+  --ds-hover: var(--surface-2);
+  --ds-folder: var(--warn);
+  color: var(--ds-ink);
+}
+
 /* El Clasificador: la carta entra de un salto, bota mientras espera y vuela a la categoría elegida. */
 @keyframes sort-enter {
   0% {
@@ -244,6 +260,19 @@ body {
 }
 .sort-quip {
   animation: sort-quip 0.4s ease-out 0.55s both;
+}
+@keyframes cal-pop {
+  from {
+    transform: translateY(6px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.cal-cell {
+  animation: cal-pop 0.35s ease-out both;
 }
 .sort-enter {
   animation: sort-enter 0.75s cubic-bezier(0.2, 0.8, 0.3, 1) both;
