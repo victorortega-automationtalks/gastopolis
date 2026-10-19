@@ -37,6 +37,11 @@ export function fmtPercent(n: number, locale = 'es-ES', digits = 0): string {
   return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: digits }).format(n)
 }
 
+/** «Ahorras el 12 % de lo que entra» o, si el balance es negativo, «Gastas un 9 % más de lo que entra». */
+export function savingsPhrase(rate: number, locale = 'es-ES'): string {
+  return rate >= 0 ? `Ahorras el ${fmtPercent(rate, locale)} de lo que entra` : `Gastas un ${fmtPercent(-rate, locale)} más de lo que entra`
+}
+
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const MONTHS_LONG = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 

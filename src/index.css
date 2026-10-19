@@ -139,20 +139,7 @@ input[type='date']::-webkit-calendar-picker-indicator {
   filter: none;
 }
 
-/* El agua del Río: destellos que corren por cada cinta. */
-.river-flow {
-  animation: river-flow linear infinite;
-}
-@keyframes river-flow {
-  to {
-    stroke-dashoffset: -49;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .river-flow {
-    animation: none !important;
-  }
   *,
   *::before,
   *::after {

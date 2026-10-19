@@ -81,7 +81,17 @@ export function detectLeaks(movements: Movement[], categories: Category[], asOf:
   const leaks: Leak[] = []
   const allRecurring = detectRecurring(upTo, asOf)
   const recurring = allRecurring.filter((r) => r.active)
-  const evidenceOf = (key: string) => expenses.filter((m) => m.conceptKey === key && m.date > yearAgo).sort((a, b) => b.date.localeCompare(a.date))
+  // Gastos del último año por concepto, de más reciente a más antiguo: se agrupan una vez (con miles de movimientos,
+  // filtrar la lista entera por cada aviso se nota).
+  const lastYearByKey = new Map<string, Movement[]>()
+  for (const m of expenses) {
+    if (m.date <= yearAgo) continue
+    const g = lastYearByKey.get(m.conceptKey)
+    if (g) g.push(m)
+    else lastYearByKey.set(m.conceptKey, [m])
+  }
+  for (const g of lastYearByKey.values()) g.sort((a, b) => b.date.localeCompare(a.date))
+  const evidenceOf = (key: string) => [...(lastYearByKey.get(key) ?? [])]
 
   // Suscripciones: cuotas pequeñas y fijas que conviene revisar de vez en cuando (la luz o el agua varían: no se olvidan).
   for (const r of recurring) {

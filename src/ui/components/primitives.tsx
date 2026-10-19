@@ -218,7 +218,7 @@ export function Stat({ label, children, sub }: { label: string; children: ReactN
     <div className="min-w-0">
       <div className="text-[11px] font-medium tracking-wider text-ink-faint uppercase">{label}</div>
       <div className="mt-1 truncate text-lg font-semibold sm:text-xl">{children}</div>
-      {sub && <div className="mt-0.5 truncate text-xs text-ink-muted">{sub}</div>}
+      {sub && <div className="mt-0.5 line-clamp-2 text-xs text-ink-muted">{sub}</div>}
     </div>
   )
 }

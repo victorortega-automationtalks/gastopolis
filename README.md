@@ -4,7 +4,7 @@ Tu dinero como una ciudad en 3D. Importa tu Excel de gastos y explóralo bloque 
 
 **100 % privada:** todo se guarda en tu dispositivo. Sin cuentas, sin servidores, sin conexión: la app no tiene forma de enviar tus datos a ningún sitio.
 
-> Estado: **fase 5 de 6, más la distribución de la 6** (Windows + iPhone) — Inicio, Ciudad, Cordillera y Balanza en 3D con reproducción en el tiempo, Río, Laboratorio con el Horizonte 3D, Objetivos, Detector de fugas, reglas, importador, movimientos, categorías y ajustes. Plan completo en [`docs/DESIGN.md`](docs/DESIGN.md).
+> Estado: **las 6 fases completas** — fluida con más de 10.000 movimientos, instalable en Windows y en el iPhone. Inicio, Ciudad, Cordillera y Balanza en 3D con reproducción en el tiempo, Río, Laboratorio con el Horizonte 3D, Objetivos, Detector de fugas, reglas, importador, movimientos, categorías y ajustes. Plan completo en [`docs/DESIGN.md`](docs/DESIGN.md).
 >
 > La app arranca **vacía**: nada de lo que hay en el repositorio son datos reales. Los datos de ejemplo son inventados y solo se cargan si pulsas «Ver con datos de ejemplo».
 
@@ -45,7 +45,7 @@ npm run app:build:windows   # instalador de Windows desde Linux (cargo-xwin + ns
 
 ## Stack
 
-React 19 · TypeScript · Vite · Tailwind 4 · Zustand · Dexie · SheetJS · three.js con react-three-fiber, drei y postprocessing · d3-hierarchy · Recharts · Tauri 2 (Windows) · vite-plugin-pwa (iPhone).
+React 19 · TypeScript · Vite · Tailwind 4 · Zustand · Dexie · SheetJS · three.js con react-three-fiber, drei y postprocessing · d3-hierarchy · gráficos SVG propios · Tauri 2 (Windows) · vite-plugin-pwa (iPhone).
 
 ## Estructura
 
