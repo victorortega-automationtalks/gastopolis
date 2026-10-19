@@ -4,7 +4,22 @@ import { normalizeKey } from '../lib/text'
 import { signFor } from '../model/aggregate'
 import { DEFAULT_SETTINGS, guessIcon } from '../model/defaults'
 import { previewRules } from '../model/rules'
-import type { Backup, Category, Goal, GoalContribution, Kind, LeakStatus, Movement, Rule, Scenario, Settings } from '../model/types'
+import type {
+  Account,
+  AccountKind,
+  Backup,
+  BankLink,
+  BankSecret,
+  Category,
+  Goal,
+  GoalContribution,
+  Kind,
+  LeakStatus,
+  Movement,
+  Rule,
+  Scenario,
+  Settings,
+} from '../model/types'
 import { categoryIdentity, type ImportPlan } from '../import/plan'
 import { db } from './db'
 
@@ -103,6 +118,8 @@ export interface MovementInput {
   categoryId: string
   notes?: string
   tags?: string[]
+  /** Cuenta (efectivo, banco…). Sin ella, el movimiento no es de ninguna. */
+  accountId?: string
 }
 
 export async function addMovement(input: MovementInput): Promise<string> {
@@ -121,6 +138,7 @@ export async function addMovement(input: MovementInput): Promise<string> {
     notes: input.notes?.trim() || undefined,
     source: 'manual',
     createdAt: Date.now(),
+    accountId: input.accountId || undefined,
   })
   return id
 }
@@ -137,6 +155,7 @@ export async function updateMovement(id: string, input: MovementInput): Promise<
     categoryId: cat.id,
     notes: input.notes?.trim() || undefined,
     tags: input.tags ?? [],
+    accountId: input.accountId || undefined,
   })
 }
 
@@ -158,9 +177,14 @@ export async function deleteMovements(ids: string[]): Promise<void> {
   await db.movements.bulkDelete(ids)
 }
 
+/** Lo que se guarda de un movimiento: nunca la fecha contable de la nómina inteligente, siempre la real. */
+export function toStored({ realDate, ...m }: Movement): Movement {
+  return realDate ? { ...m, date: realDate } : m
+}
+
 /** Vuelve a poner movimientos borrados (deshacer). */
 export async function restoreMovements(ms: Movement[]): Promise<void> {
-  await db.movements.bulkPut(ms)
+  await db.movements.bulkPut(ms.map(toStored))
 }
 
 const STARTER: [string, Kind][] = [
@@ -276,6 +300,8 @@ export async function exportBackup(): Promise<Backup> {
     db.decisions.toArray(),
     db.scenarios.toArray(),
   ])
+  // La credencial de Enable Banking no viaja en las copias: se vuelve a cargar el .pem en el otro equipo.
+  const accounts = await db.accounts.toArray()
   return {
     app: 'gastopolis',
     version: 1,
@@ -289,6 +315,7 @@ export async function exportBackup(): Promise<Backup> {
     batches,
     decisions,
     scenarios,
+    accounts,
   }
 }
 
@@ -305,27 +332,32 @@ export function validateBackup(data: unknown): Backup {
 
 /** Sustituye todo por el contenido de la copia. */
 export async function restoreBackup(b: Backup): Promise<void> {
-  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios, db.settings], async () => {
-    await clearAll()
-    await db.categories.bulkAdd(b.categories)
-    await db.movements.bulkAdd(b.movements)
-    await db.merchants.bulkAdd(b.merchants)
-    await db.rules.bulkAdd(b.rules)
-    await db.goals.bulkAdd(b.goals)
-    await db.batches.bulkAdd(b.batches)
-    await db.decisions.bulkAdd(b.decisions ?? [])
-    await db.scenarios.bulkAdd(b.scenarios ?? [])
-    await db.settings.put({ ...DEFAULT_SETTINGS, ...b.settings, id: 'settings' })
-  })
+  await db.transaction(
+    'rw',
+    [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios, db.accounts, db.settings],
+    async () => {
+      await clearAll()
+      await db.categories.bulkAdd(b.categories)
+      await db.movements.bulkAdd(b.movements)
+      await db.merchants.bulkAdd(b.merchants)
+      await db.rules.bulkAdd(b.rules)
+      await db.goals.bulkAdd(b.goals)
+      await db.batches.bulkAdd(b.batches)
+      await db.decisions.bulkAdd(b.decisions ?? [])
+      await db.scenarios.bulkAdd(b.scenarios ?? [])
+      await db.accounts.bulkAdd(b.accounts ?? [])
+      await db.settings.put({ ...DEFAULT_SETTINGS, ...b.settings, id: 'settings' })
+    },
+  )
 }
 
 function clearAll() {
-  return Promise.all([db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios].map((t) => t.clear()))
+  return Promise.all([db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios, db.accounts].map((t) => t.clear()))
 }
 
 /** Borra todos los datos (los ajustes se conservan). */
 export async function resetAll(): Promise<void> {
-  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios], clearAll)
+  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.scenarios, db.accounts], clearAll)
 }
 
 /** Añade datos de ejemplo a lo que haya (normalmente, nada). */
@@ -481,4 +513,101 @@ export async function saveScenario(s: Omit<Scenario, 'id' | 'createdAt'> & { id?
 
 export async function deleteScenario(id: string): Promise<void> {
   await db.scenarios.delete(id)
+}
+
+// ── Cuentas ────────────────────────────────────────────────────────────────
+
+const ACCOUNT_COLORS: Record<AccountKind, string> = { cash: '#16a34a', bank: '#2563eb', other: '#7c3aed' }
+
+export async function createAccount(input: { name: string; kind: AccountKind; color?: string; bank?: BankLink }): Promise<string> {
+  const id = newId()
+  const order = (await db.accounts.count()) + 1
+  await db.accounts.add({
+    id,
+    name: input.name.trim() || 'Cuenta',
+    kind: input.kind,
+    color: input.color ?? ACCOUNT_COLORS[input.kind],
+    order,
+    bank: input.bank,
+  })
+  return id
+}
+
+export async function updateAccount(id: string, patch: Partial<Omit<Account, 'id'>>): Promise<void> {
+  await db.accounts.update(id, patch)
+}
+
+/** Cambia solo el enlace con el banco (estado de la sincronización, sesión renovada…). */
+export async function updateBankLink(id: string, patch: Partial<BankLink>): Promise<void> {
+  await db.transaction('rw', db.accounts, async () => {
+    const a = await db.accounts.get(id)
+    if (a?.bank) await db.accounts.update(id, { bank: { ...a.bank, ...patch } })
+  })
+}
+
+/**
+ * Borra una cuenta. Sus movimientos se quedan (sin cuenta) salvo que se pida borrarlos: es lo que se espera al
+ * desconectar un banco del que no quieres nada.
+ */
+export async function deleteAccount(id: string, withMovements = false): Promise<void> {
+  await db.transaction('rw', db.accounts, db.movements, async () => {
+    if (withMovements) await db.movements.filter((m) => m.accountId === id).delete()
+    else await db.movements.filter((m) => m.accountId === id).modify((m) => void delete m.accountId)
+    await db.accounts.delete(id)
+  })
+}
+
+export async function saveBankSecret(secret: Omit<BankSecret, 'id'>): Promise<void> {
+  await db.secrets.put({ ...secret, id: 'enablebanking' })
+}
+
+export async function deleteBankSecret(): Promise<void> {
+  await db.secrets.delete('enablebanking')
+}
+
+/** Busca una categoría por nombre y tipo, o la crea: «Sin clasificar», «Traspasos entre mis cuentas»… */
+async function ensureCategory(name: string, kind: Kind): Promise<string> {
+  const key = normalizeKey(name)
+  const found = (await db.categories.toArray()).find((c) => c.kind === kind && normalizeKey(c.name) === key)
+  if (found) return found.id
+  return createCategory({ name, kind })
+}
+
+export const BANK_CATEGORIES = {
+  expense: ['Sin clasificar', 'expense'],
+  income: ['Otros ingresos', 'income'],
+  transfer: ['Traspasos entre mis cuentas', 'transfer'],
+} as const
+
+/** Las categorías de reserva de la sincronización (se crean la primera vez). */
+export async function bankFallbacks(): Promise<{ expense: string; income: string; transfer: string }> {
+  return {
+    expense: await ensureCategory(...BANK_CATEGORIES.expense),
+    income: await ensureCategory(...BANK_CATEGORIES.income),
+    transfer: await ensureCategory(...BANK_CATEGORIES.transfer),
+  }
+}
+
+/**
+ * Aplica una sincronización de una cuenta, todo o nada: movimientos nuevos, los que ya estaban y resultan ser estos
+ * del banco, los traspasos entre cuentas propias y el estado de la cuenta.
+ */
+export async function applyBankSync(
+  accountId: string,
+  plan: { added: Movement[]; linked: { id: string; externalId: string }[] },
+  transfers: { pairs: [string, string][]; categoryId: string },
+  link: Partial<BankLink>,
+): Promise<void> {
+  await db.transaction('rw', db.movements, db.accounts, async () => {
+    if (plan.added.length) await db.movements.bulkAdd(plan.added.map((m) => ({ ...m, id: m.id || newId() })))
+    for (const l of plan.linked) await db.movements.update(l.id, { accountId, externalId: l.externalId })
+    const ids = transfers.pairs.flat()
+    if (ids.length) {
+      const ms = (await db.movements.bulkGet(ids)).filter((m): m is Movement => !!m)
+      // Traspaso: conserva el signo de cada lado (sale de una, entra en otra).
+      await db.movements.bulkPut(ms.map((m) => ({ ...m, categoryId: transfers.categoryId, kind: 'transfer' as const })))
+    }
+    const a = await db.accounts.get(accountId)
+    if (a?.bank) await db.accounts.update(accountId, { bank: { ...a.bank, ...link } })
+  })
 }

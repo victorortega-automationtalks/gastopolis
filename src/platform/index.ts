@@ -75,3 +75,45 @@ export function stamp(): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
 }
+
+// ── Banco (Enable Banking) ───────────────────────────────────────────────────
+
+/**
+ * La sincronización con el banco solo existe en la app de Windows: la web del iPhone no puede llamar a la API (el
+ * navegador lo bloquea y no hay servidor intermedio, a propósito). Al iPhone le llegan los datos con la copia.
+ */
+export const bankSupported = runtime === 'tauri'
+
+export interface BankCall {
+  appId: string
+  keyPem: string
+  method: 'GET' | 'POST' | 'DELETE'
+  path: string
+  query?: [string, string][]
+  body?: unknown
+}
+
+export async function bankRequest(call: BankCall): Promise<{ status: number; body: string }> {
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke('bank_request', { call: { ...call, query: call.query ?? [] } })
+}
+
+/** Espera en localhost a que el banco devuelva al usuario. Devuelve «/callback?code=…» o null. */
+export async function waitBankCallback(port: number, timeoutSecs = 900): Promise<string | null> {
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke('bank_wait_callback', { port, timeoutSecs })
+}
+
+export async function cancelBankCallback(): Promise<void> {
+  if (runtime !== 'tauri') return
+  const { invoke } = await import('@tauri-apps/api/core')
+  await invoke('bank_cancel_callback')
+}
+
+/** Abre una página https en el navegador del sistema (en la web, en otra pestaña). */
+export async function openExternal(url: string): Promise<void> {
+  if (runtime === 'tauri') {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('open_external', { url })
+  } else window.open(url, '_blank', 'noopener,noreferrer')
+}

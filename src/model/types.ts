@@ -22,9 +22,62 @@ export interface Movement {
   merchantId?: string
   tags: string[]
   notes?: string
-  source: 'import' | 'manual' | 'sample'
+  source: 'import' | 'manual' | 'sample' | 'bank'
   importBatchId?: string
   createdAt: number
+  /** Cuenta a la que pertenece (efectivo, una cuenta del banco…). Sin cuenta: los de antes de que existieran. */
+  accountId?: string
+  /** Identificador del movimiento en el banco: evita traerlo dos veces. */
+  externalId?: string
+  /**
+   * Solo en memoria, nunca se guarda: fecha real de un cobro que cuenta para otro mes (nómina inteligente). Entonces
+   * `date` es la fecha contable. Ver `model/payday.ts`.
+   */
+  realDate?: ISODate
+}
+
+export type AccountKind = 'cash' | 'bank' | 'other'
+
+/** Enlace de una cuenta con su banco a través de Enable Banking (solo lectura). */
+export interface BankLink {
+  provider: 'enablebanking'
+  aspsp: { name: string; country: string }
+  /** Id de la cuenta en la sesión actual (cambia al renovar). */
+  accountUid: string
+  /** Huella estable de la cuenta entre sesiones: sirve para reconocerla al renovar el permiso. */
+  identificationHash?: string
+  /** IBAN enmascarado para enseñarlo (ES12 •••• 3456). */
+  ibanMasked?: string
+  currency: string
+  sessionId: string
+  /** Hasta cuándo vale el permiso del banco (ISO con hora). */
+  validUntil: string
+  /** Última sincronización correcta (ms). */
+  lastSyncAt?: number
+  /** Hasta qué día (incluido) están ya traídos los movimientos. */
+  syncedThrough?: ISODate
+  lastError?: string
+  balance?: { amount: number; date: string }
+}
+
+/** Credencial de la aplicación de Enable Banking del usuario. Solo en este dispositivo: no va en las copias. */
+export interface BankSecret {
+  id: 'enablebanking'
+  /** Id de la aplicación (el nombre del archivo .pem). */
+  appId: string
+  privateKeyPem: string
+  /** Dirección de vuelta registrada en el panel de Enable Banking. */
+  redirectUrl: string
+}
+
+export interface Account {
+  id: string
+  name: string
+  kind: AccountKind
+  color: string
+  order: number
+  archived?: boolean
+  bank?: BankLink
 }
 
 export interface Category {
@@ -120,6 +173,10 @@ export interface Settings {
   leakDupDays?: number
   /** Cuándo se hizo la última copia de seguridad (ms). */
   lastBackupAt?: number
+  /** Nómina inteligente: los ingresos mensuales cuentan para el mes que pagan (activado si no se dice nada). */
+  paydayShift?: boolean
+  /** Cada cuántas horas se sincronizan los bancos solos (PSD2 permite hasta 4 lecturas al día sin ti delante). */
+  bankSyncHours?: number
 }
 
 /** Escenario guardado del Laboratorio: palancas y supuestos con nombre. */
@@ -144,4 +201,5 @@ export interface Backup {
   batches: ImportBatch[]
   decisions?: LeakDecision[]
   scenarios?: Scenario[]
+  accounts?: Account[]
 }

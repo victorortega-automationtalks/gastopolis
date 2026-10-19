@@ -16,7 +16,11 @@ export interface Filters {
   search: string
   /** Vacío = todas. Incluye subcategorías. */
   categoryIds: string[]
+  /** Vacío = todas. `NO_ACCOUNT` = los que no tienen cuenta. */
+  accountIds?: string[]
 }
+
+export const NO_ACCOUNT = '__sin-cuenta__'
 
 export const DEFAULT_FILTERS: Filters = {
   period: { preset: 'all' },

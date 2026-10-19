@@ -1,3 +1,4 @@
+import { shownDate } from '../../model/payday'
 import clsx from 'clsx'
 import { ArrowUpLeft, ChevronRight, LogIn, Pencil } from 'lucide-react'
 import { useMemo } from 'react'
@@ -81,7 +82,7 @@ export function CityPanel({
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
             <div className="text-xs text-ink-faint">Fecha</div>
-            {fmtDate(m.date)}
+            {fmtDate(shownDate(m))}
           </div>
           <div>
             <div className="text-xs text-ink-faint">Importe</div>
@@ -168,7 +169,7 @@ export function CityPanel({
                   />
                   <span className="relative h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: c.color }} />
                   <span className="relative min-w-0 flex-1 truncate">
-                    {c.movement && <span className="num mr-1.5 text-xs text-ink-faint">{fmtDate(c.movement.date, false)}</span>}
+                    {c.movement && <span className="num mr-1.5 text-xs text-ink-faint">{fmtDate(shownDate(c.movement), false)}</span>}
                     {c.label}
                   </span>
                   <span className="num relative text-xs text-ink-muted">{money(c.value)}</span>
@@ -187,7 +188,7 @@ export function CityPanel({
           {recent.map((m) => (
             <li key={m.id}>
               <button onClick={() => editMovement(m.id)} className="flex w-full items-center gap-2 py-1.5 text-left text-sm hover:text-ink">
-                <span className="num w-16 shrink-0 text-xs text-ink-faint">{fmtDate(m.date, false)}</span>
+                <span className="num w-16 shrink-0 text-xs text-ink-faint">{fmtDate(shownDate(m), false)}</span>
                 <span className="min-w-0 flex-1 truncate text-ink-muted">{m.concept}</span>
                 <Money value={m.amount} kind={m.kind} className="text-xs" />
               </button>

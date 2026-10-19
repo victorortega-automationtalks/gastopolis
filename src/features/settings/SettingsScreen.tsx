@@ -1,6 +1,7 @@
 import { Database, Download, Lock, RotateCcw, Trash2 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
-import { useBatches, useCategories, useMovements, useSettings } from '../../data/hooks'
+import { useMemo, useState, type ReactNode } from 'react'
+import { useBatches, useCategories, useCategoryMap, useRawMovements, useSettings } from '../../data/hooks'
+import { paydayShifts } from '../../model/payday'
 import { loadSample, removeSample, resetAll, saveSettings, toCSV, undoImport } from '../../data/repo'
 import { monthName } from '../../model/format'
 import { isNative, saveFile, stamp } from '../../platform'
@@ -23,7 +24,7 @@ function Section({ title, desc, children }: { title: string; desc?: string; chil
 
 export function SettingsScreen() {
   const settings = useSettings()
-  const { movements } = useMovements()
+  const { movements } = useRawMovements()
   const categories = useCategories()
   const batches = useBatches()
   const toast = useUI((s) => s.toast)
@@ -70,6 +71,8 @@ export function SettingsScreen() {
           </Field>
         </div>
       </Section>
+
+      <PaydaySection />
 
       <Section title="Detector de fugas" desc="Ajusta qué cuenta como gasto hormiga y cuándo dos cargos iguales se consideran duplicados.">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -211,5 +214,43 @@ export function SettingsScreen() {
         </Field>
       </Modal>
     </div>
+  )
+}
+
+/** Nómina inteligente: qué ha detectado y un interruptor. */
+function PaydaySection() {
+  const settings = useSettings()
+  const { movements } = useRawMovements()
+  const categories = useCategoryMap()
+  const series = useMemo(() => paydayShifts(movements).series, [movements])
+  const on = settings.paydayShift !== false
+  const when = (offset: number) =>
+    offset < 0 ? `suele llegar ${-offset === 1 ? 'el último día' : `${-offset} días antes de fin de mes`}` : `suele llegar el día ${offset + 1}`
+  return (
+    <Section
+      title="Nómina inteligente"
+      desc="Si cobras a finales de mes, ese dinero es para el mes siguiente: la nómina del 28 de septiembre cuenta en octubre. Si un mes llega tarde o pronto, se coloca en el mes que le toca. En las listas siempre ves la fecha real."
+    >
+      <Segmented<'on' | 'off'>
+        value={on ? 'on' : 'off'}
+        onChange={(v) => saveSettings({ paydayShift: v === 'on' })}
+        options={[
+          { value: 'on', label: 'Activada' },
+          { value: 'off', label: 'Fechas reales' },
+        ]}
+      />
+      {series.length > 0 ? (
+        <ul className="mt-3 space-y-1 text-sm text-ink-muted">
+          {series.map((s) => (
+            <li key={s.categoryId}>
+              <span className="font-medium text-ink">{categories.get(s.categoryId)?.name ?? 'Ingreso'}</span>: {when(s.offset)}
+              {s.shifted > 0 && ` · ${s.shifted} ${s.shifted === 1 ? 'cobro cuenta' : 'cobros cuentan'} para el mes siguiente`}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-ink-faint">Aún no hay ingresos mensuales que detectar (hacen falta tres meses).</p>
+      )}
+    </Section>
   )
 }

@@ -3,7 +3,19 @@ import { create } from 'zustand'
 import { DEFAULT_FILTERS, type Filters } from '../model/period'
 
 export type Route =
-  'inicio' | 'ciudad' | 'cordillera' | 'balanza' | 'rio' | 'movimientos' | 'objetivos' | 'fugas' | 'laboratorio' | 'categorias' | 'informes' | 'ajustes'
+  | 'inicio'
+  | 'ciudad'
+  | 'cordillera'
+  | 'balanza'
+  | 'rio'
+  | 'movimientos'
+  | 'cuentas'
+  | 'objetivos'
+  | 'fugas'
+  | 'laboratorio'
+  | 'categorias'
+  | 'informes'
+  | 'ajustes'
 
 export const ROUTES: Route[] = [
   'inicio',
@@ -12,6 +24,7 @@ export const ROUTES: Route[] = [
   'balanza',
   'rio',
   'movimientos',
+  'cuentas',
   'objetivos',
   'fugas',
   'laboratorio',

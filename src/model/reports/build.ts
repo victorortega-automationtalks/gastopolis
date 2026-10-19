@@ -4,6 +4,7 @@ import { GOAL_STATUS_LABEL, goalProgress } from '../goals'
 import { dataAsOf } from '../insights'
 import { atHorizons, baselineFrom, DEFAULT_ASSUMPTIONS, LEVER_LABEL, leverMonthly, project, type Baseline, type Lever } from '../lab'
 import { detectLeaks, LEAK_LABEL, summarizeLeaks } from '../leaks'
+import { shownDate } from '../payday'
 import { monthKey, resolvePeriod, type Period } from '../period'
 import { CADENCE_LABEL, detectRecurring } from '../recurring'
 import { monthRange, rootIndex } from '../series'
@@ -387,7 +388,7 @@ function movementsList(c: Ctx): ReportDoc {
         kind: 'table',
         title: `${ms.length.toLocaleString('es-ES')} movimientos`,
         columns: [col('Fecha', 'date'), col('Concepto', 'text'), col('Categoría', 'text'), col('Tipo', 'text'), col('Importe'), col('Notas', 'text')],
-        rows: ms.map((m) => [m.date, m.concept, c.cat(m.categoryId)?.name ?? NO_CAT, KIND_LABEL[m.kind], m.amount, m.notes ?? '']),
+        rows: ms.map((m) => [shownDate(m), m.concept, c.cat(m.categoryId)?.name ?? NO_CAT, KIND_LABEL[m.kind], m.amount, m.notes ?? '']),
         colors: ms.map((m) => c.cat(c.root(m.categoryId))?.color ?? GREY),
         total: ['Total', null, null, null, sum(ms.map((m) => m.amount)), null],
       },

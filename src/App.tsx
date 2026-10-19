@@ -7,6 +7,7 @@ import { MovementsScreen } from './features/movements/MovementsScreen'
 import { ComingSoon } from './features/placeholder/ComingSoon'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { useUI, type Route } from './store/ui'
+import { useBankAutoSync } from './features/accounts/useBankAutoSync'
 import { AppShell } from './ui/AppShell'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import { CURRENT_PHASE, navItem } from './ui/nav'
@@ -19,6 +20,7 @@ const LabScreen = lazy(() => import('./features/lab/LabScreen').then((m) => ({ d
 const RiverScreen = lazy(() => import('./features/river/RiverScreen').then((m) => ({ default: m.RiverScreen })))
 const GoalsScreen = lazy(() => import('./features/goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })))
 const LeaksScreen = lazy(() => import('./features/leaks/LeaksScreen').then((m) => ({ default: m.LeaksScreen })))
+const AccountsScreen = lazy(() => import('./features/accounts/AccountsScreen').then((m) => ({ default: m.AccountsScreen })))
 const ReportsScreen = lazy(() => import('./features/reports/ReportsScreen').then((m) => ({ default: m.ReportsScreen })))
 const DashboardScreen = lazy(() => import('./features/dashboard/DashboardScreen').then((m) => ({ default: m.DashboardScreen })))
 
@@ -96,6 +98,12 @@ function Screen({ route }: { route: Route }) {
           <LabScreen />
         </Suspense>
       )
+    case 'cuentas':
+      return (
+        <Suspense fallback={<Loading />}>
+          <AccountsScreen />
+        </Suspense>
+      )
     case 'informes':
       return (
         <Suspense fallback={<Loading />}>
@@ -117,6 +125,7 @@ function Screen({ route }: { route: Route }) {
 
 export default function App() {
   useTheme()
+  useBankAutoSync()
   const route = useUI((s) => s.route)
   return (
     <>

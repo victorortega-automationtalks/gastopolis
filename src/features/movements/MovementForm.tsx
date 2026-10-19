@@ -1,7 +1,8 @@
+import { shownDate } from '../../model/payday'
 import clsx from 'clsx'
 import { Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useCategories, useMovements, useRules } from '../../data/hooks'
+import { useAccounts, useCategories, useMovements, useRules } from '../../data/hooks'
 import { addMovement, deleteMovements, restoreMovements, updateMovement } from '../../data/repo'
 import { parseAmount } from '../../import/values'
 import { normalizeKey } from '../../lib/text'
@@ -65,11 +66,14 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
   const rules = useRules()
   const toast = useUI((s) => s.toast)
   const [kind, setKind] = useState<Kind>(current?.kind ?? 'expense')
-  const [date, setDate] = useState(current?.date ?? today())
+  const [date, setDate] = useState(current ? shownDate(current) : today())
   const [amount, setAmount] = useState(current ? String(current.kind === 'transfer' ? current.amount : Math.abs(current.amount)).replace('.', ',') : '')
   const [concept, setConcept] = useState(current?.concept ?? '')
   const [pickedCategory, setPickedCategory] = useState(current?.categoryId ?? '')
   const [notes, setNotes] = useState(current?.notes ?? '')
+  const accounts = useAccounts()
+  const [accountId, setAccountId] = useState(current ? (current.accountId ?? '') : lastAccount())
+  const accountOf = accounts.find((a) => a.id === accountId)
   const [error, setError] = useState<string | null>(null)
 
   const ofKind = useMemo(() => categories.filter((c) => c.kind === kind), [categories, kind])
@@ -105,7 +109,8 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
     if (!categoryId || !ofKind.some((c) => c.id === categoryId)) return setError('Elige una categoría')
     if (!concept.trim()) return setError('Escribe un concepto')
     // En transferencias el signo lo decide quien escribe; en el resto, la categoría.
-    const input = { date, amount: kind === 'transfer' ? n : Math.abs(n), concept, categoryId, notes }
+    const input = { date, amount: kind === 'transfer' ? n : Math.abs(n), concept, categoryId, notes, accountId: accountId || undefined }
+    if (!accountOf?.bank) rememberAccount(accountId)
     try {
       if (current) await updateMovement(current.id, input)
       else await addMovement(input)
@@ -204,10 +209,46 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
       {kind === 'transfer' && (
         <p className="text-xs text-ink-muted">En transferencias, un importe negativo aparta dinero (a ahorro o inversión) y uno positivo lo trae de vuelta.</p>
       )}
+      {accounts.length > 0 &&
+        (accountOf?.bank ? (
+          <p className="text-xs text-ink-muted">
+            Viene de <b className="text-ink">{accountOf.name}</b> (sincronizado con el banco).
+          </p>
+        ) : (
+          <Field label="Cuenta" hint="Efectivo, una cuenta que no está conectada… Los bancos conectados traen sus movimientos solos.">
+            <select className="field" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+              <option value="">Sin cuenta</option>
+              {accounts
+                .filter((a) => !a.bank && !a.archived)
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+        ))}
       <Field label="Notas">
         <textarea className="field min-h-16" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
       {error && <p className="text-sm text-danger">{error}</p>}
     </form>
   )
+}
+
+/** La última cuenta elegida al apuntar (en este dispositivo): quien apunta efectivo suele apuntar efectivo. */
+function lastAccount(): string {
+  try {
+    return localStorage.getItem('gastopolis.lastAccount') ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function rememberAccount(id: string) {
+  try {
+    localStorage.setItem('gastopolis.lastAccount', id)
+  } catch {
+    // Sin almacenamiento: no pasa nada.
+  }
 }

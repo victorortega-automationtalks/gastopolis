@@ -37,6 +37,7 @@ import { useLeaks } from '../leaks/useLeaks'
 import { moneyFlow } from '../../model/flow'
 import { RiverChart } from '../river/RiverChart'
 import { Welcome } from '../onboarding/Welcome'
+import { BankAlerts } from '../accounts/BankAlerts'
 import { BackupReminder } from '../settings/backup'
 import { CARD_LABEL, useDashboard, type CardId } from './store'
 import { Delta, Meter, Sparkline } from './viz'
@@ -154,6 +155,7 @@ export function DashboardScreen() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4">
       <BackupReminder />
+      <BankAlerts />
       <div className="flex flex-wrap items-center gap-2">
         <div className="glass flex items-center rounded-xl p-0.5">
           <button
