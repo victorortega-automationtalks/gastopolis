@@ -1,9 +1,9 @@
 import clsx from 'clsx'
 import { ArrowUpLeft, ChevronRight, LogIn, Pencil } from 'lucide-react'
 import { useMemo } from 'react'
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
 import { useCategoryMap, useSettings } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
+import { ColumnChart } from '../../ui/charts/Charts'
 import { fmtDate, fmtMoney, fmtMonth, fmtPercent } from '../../model/format'
 import { movementsOf, type CityNode } from '../../model/hierarchy'
 import { monthKey } from '../../model/period'
@@ -132,33 +132,15 @@ export function CityPanel({
       {series.length > 1 && (
         <section>
           <h3 className="mb-1 text-xs font-medium text-ink-muted">Por mes · media {money(node.value / months, true)}</h3>
-          <div className="h-28">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={series} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap={2}>
-                <XAxis
-                  dataKey="month"
-                  tickFormatter={(k: string) => fmtMonth(k).split(' ')[0]}
-                  tick={{ fontSize: 10, fill: 'var(--ink-faint)' }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                  minTickGap={8}
-                />
-                <Tooltip
-                  cursor={{ fill: 'var(--surface-2)' }}
-                  content={({ active, payload }) =>
-                    active && payload?.[0] ? (
-                      <div className="rounded-lg border border-line-strong bg-surface-solid px-2.5 py-1.5 text-xs shadow-xl">
-                        <div className="text-ink-muted">{fmtMonth(String(payload[0].payload.month), true)}</div>
-                        <div className="num font-semibold text-ink">{money(Number(payload[0].value))}</div>
-                      </div>
-                    ) : null
-                  }
-                />
-                <Bar dataKey="value" fill={node.color} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ColumnChart
+            labels={series.map((p) => fmtMonth(p.month).split(' ')[0])}
+            series={[{ id: 'v', label: node.label, color: node.color, values: series.map((p) => p.value) }]}
+            height={112}
+            yAxis={false}
+            format={(v) => money(v)}
+            title={(i) => fmtMonth(series[i].month, true)}
+            ariaLabel={`${node.label} por mes`}
+          />
         </section>
       )}
 

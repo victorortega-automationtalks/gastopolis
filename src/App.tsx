@@ -11,7 +11,7 @@ import { AppShell } from './ui/AppShell'
 import { ErrorBoundary } from './ui/ErrorBoundary'
 import { CURRENT_PHASE, navItem } from './ui/nav'
 
-// Las escenas (three.js, recharts) van en su propio chunk: la primera carga solo trae lo básico.
+// Las escenas (three.js) van en su propio chunk: la primera carga solo trae lo básico.
 const CityScreen = lazy(() => import('./features/city/CityScreen').then((m) => ({ default: m.CityScreen })))
 const RidgeScreen = lazy(() => import('./features/ridge/RidgeScreen').then((m) => ({ default: m.RidgeScreen })))
 const BalanceScreen = lazy(() => import('./features/balance/BalanceScreen').then((m) => ({ default: m.BalanceScreen })))

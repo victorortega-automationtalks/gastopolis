@@ -14,7 +14,6 @@ import {
   Upload,
 } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useCategories, useCategoryMap, useGoals, useMovements, useSettings } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
 import { totals } from '../../model/aggregate'
@@ -30,6 +29,7 @@ import type { Movement } from '../../model/types'
 import { layoutCity } from '../../scenes/city/layout'
 import { useSceneColors } from '../../scenes/common'
 import { useUI } from '../../store/ui'
+import { ColumnChart } from '../../ui/charts/Charts'
 import { Button, Card } from '../../ui/components/primitives'
 import { CategoryIcon } from '../../ui/icons'
 import { useOpenInCity } from '../city/openInCity'
@@ -377,59 +377,21 @@ function Kpi({ label, value, trend, children }: { label: string; value: string; 
 
 function FlowCard({ d, money }: { d: Data; money: MoneyFn }) {
   const colors = useSceneColors()
-  const data = d.flow.map((f) => ({ ...f, label: fmtMonth(f.month).split(' ')[0] }))
   return (
     <Card className="h-full p-5">
       <CardHead title="Flujo de los últimos 12 meses" />
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barGap={2} barCategoryGap="22%">
-            <CartesianGrid vertical={false} stroke={colors.line} strokeOpacity={0.5} />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: colors.inkMuted }} axisLine={false} tickLine={false} />
-            <YAxis
-              tickFormatter={(v: number) => money(v, { compact: true })}
-              tick={{ fontSize: 11, fill: colors.inkMuted }}
-              axisLine={false}
-              tickLine={false}
-              width={56}
-            />
-            <Tooltip
-              cursor={{ fill: colors.line, fillOpacity: 0.25 }}
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null
-                const row = payload[0].payload as (typeof data)[number]
-                return (
-                  <div className="rounded-lg border border-line-strong bg-surface-solid px-3 py-2 text-xs shadow-xl">
-                    <div className="mb-1 font-medium text-ink capitalize">{fmtMonth(row.month, true)}</div>
-                    {[
-                      ['Ingresos', row.income, colors.income],
-                      ['Gastos', row.expense, colors.expense],
-                      ['Balance', row.net, colors.accent2],
-                    ].map(([l, v, c]) => (
-                      <div key={l as string} className="flex items-center gap-2">
-                        <span className="h-0.5 w-3 rounded" style={{ background: c as string }} />
-                        <span className="num font-semibold text-ink">{money(v as number, { signed: l === 'Balance' })}</span>
-                        <span className="text-ink-muted">{l}</span>
-                      </div>
-                    ))}
-                  </div>
-                )
-              }}
-            />
-            <Legend iconSize={10} wrapperStyle={{ fontSize: 12, color: colors.inkMuted }} />
-            <Bar dataKey="income" name="Ingresos" fill={colors.income} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            <Bar dataKey="expense" name="Gastos" fill={colors.expense} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            <Line
-              dataKey="net"
-              name="Balance"
-              stroke={colors.accent2}
-              strokeWidth={2}
-              dot={{ r: 3, strokeWidth: 0, fill: colors.accent2 }}
-              isAnimationActive={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+      <ColumnChart
+        labels={d.flow.map((f) => fmtMonth(f.month).split(' ')[0])}
+        series={[
+          { id: 'income', label: 'Ingresos', color: colors.income, values: d.flow.map((f) => f.income) },
+          { id: 'expense', label: 'Gastos', color: colors.expense, values: d.flow.map((f) => f.expense) },
+          { id: 'net', label: 'Balance', color: colors.accent2, values: d.flow.map((f) => f.net), line: true },
+        ]}
+        height={232}
+        format={(v) => money(v, { compact: true })}
+        title={(i) => fmtMonth(d.flow[i].month, true)}
+        ariaLabel="Ingresos, gastos y balance de los últimos 12 meses"
+      />
     </Card>
   )
 }
