@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { AlertTriangle, Banknote, KeyRound, Landmark, Plus, RefreshCw, Trash2, Wallet, Wand2, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Banknote, KeyRound, Landmark, Plus, RefreshCw, Gamepad2, Trash2, Wallet, Wand2, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { bankEnabled, syncAccounts, syncAccount } from '../../bank/run'
 import { consentState, manualSync, MIN_AUTO_HOURS } from '../../bank/sync'
@@ -46,6 +46,7 @@ export function AccountsScreen() {
   const secret = useBankSecret()
   const settings = useSettings()
   const toast = useUI((s) => s.toast)
+  const navigate = useUI((s) => s.navigate)
   const [setup, setSetup] = useState(false)
   const [connect, setConnect] = useState<{ renew?: { name: string; country: string } } | null>(null)
   const [adding, setAdding] = useState(false)
@@ -160,9 +161,12 @@ export function AccountsScreen() {
         )}
 
         {fromBank && (
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button onClick={() => setAutoAssign(true)} className="h-auto min-h-9 py-2 text-left">
               <Wand2 size={15} /> Asignar automáticamente las categorías a registros del banco
+            </Button>
+            <Button variant="ghost" onClick={() => navigate('clasificar')}>
+              <Gamepad2 size={15} /> Clasificar jugando
             </Button>
           </div>
         )}

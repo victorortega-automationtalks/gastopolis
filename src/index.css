@@ -126,6 +126,92 @@ body {
   }
 }
 
+/* El Clasificador: la carta entra de un salto, bota mientras espera y vuela a la categoría elegida. */
+@keyframes sort-enter {
+  0% {
+    transform: translateY(-160px) scale(0.55) rotate(-10deg);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(0) scale(1.08, 0.88);
+    opacity: 1;
+  }
+  55% {
+    transform: translateY(-44px) scale(0.98, 1.03) rotate(3deg);
+  }
+  70% {
+    transform: translateY(0) scale(1.04, 0.95);
+  }
+  82% {
+    transform: translateY(-12px) rotate(-1deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes sort-bounce {
+  0%,
+  62%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  70% {
+    transform: translateY(0) scale(1.05, 0.94);
+  }
+  80% {
+    transform: translateY(-26px) scale(0.98, 1.03) rotate(-1.5deg);
+  }
+  90% {
+    transform: translateY(0) scale(1.03, 0.97);
+  }
+}
+@keyframes sort-shadow {
+  0%,
+  62%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.55;
+  }
+  80% {
+    transform: scaleX(0.7);
+    opacity: 0.25;
+  }
+}
+@keyframes sort-points {
+  0% {
+    transform: translate(-50%, 0) scale(0.7);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -90px) scale(1.2);
+    opacity: 0;
+  }
+}
+@keyframes sort-skip {
+  to {
+    transform: translateX(120%) rotate(18deg);
+    opacity: 0;
+  }
+}
+.sort-enter {
+  animation: sort-enter 0.75s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.sort-bounce {
+  animation: sort-bounce 2.6s ease-in-out infinite;
+}
+.sort-shadow {
+  animation: sort-shadow 2.6s ease-in-out infinite;
+}
+.sort-points {
+  animation: sort-points 0.9s ease-out forwards;
+}
+.sort-skip {
+  animation: sort-skip 0.35s ease-in forwards;
+}
+
 /* Scrollbars discretas */
 * {
   scrollbar-width: thin;

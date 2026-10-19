@@ -2,6 +2,7 @@ import {
   Building2,
   FileText,
   FlaskConical,
+  Gamepad2,
   Landmark,
   LayoutDashboard,
   ListOrdered,
@@ -76,6 +77,14 @@ export const NAV: NavItem[] = [
   },
   { route: 'movimientos', label: 'Movimientos', icon: ListOrdered, phase: 1, filters: true, blurb: '' },
   {
+    route: 'clasificar',
+    label: 'Clasificar',
+    icon: Gamepad2,
+    phase: 8,
+    filters: false,
+    blurb: 'Minijuego: las cartas de «Sin clasificar» van saltando y tú eliges su categoría; lo parecido se clasifica a la vez.',
+  },
+  {
     route: 'cuentas',
     label: 'Cuentas',
     icon: Landmark,
@@ -121,7 +130,7 @@ export const NAV: NavItem[] = [
 
 export const NAV_GROUPS: { label: string; routes: Route[] }[] = [
   { label: 'Explorar', routes: ['inicio', 'ciudad', 'cordillera', 'balanza', 'rio'] },
-  { label: 'Gestionar', routes: ['movimientos', 'cuentas', 'categorias', 'informes'] },
+  { label: 'Gestionar', routes: ['movimientos', 'clasificar', 'cuentas', 'categorias', 'informes'] },
   { label: 'Planificar', routes: ['objetivos', 'fugas', 'laboratorio'] },
 ]
 

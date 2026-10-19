@@ -9,6 +9,7 @@ export type Route =
   | 'balanza'
   | 'rio'
   | 'movimientos'
+  | 'clasificar'
   | 'cuentas'
   | 'objetivos'
   | 'fugas'
@@ -24,6 +25,7 @@ export const ROUTES: Route[] = [
   'balanza',
   'rio',
   'movimientos',
+  'clasificar',
   'cuentas',
   'objetivos',
   'fugas',

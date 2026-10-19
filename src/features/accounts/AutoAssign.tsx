@@ -103,7 +103,7 @@ export function AutoAssign({ onClose }: { onClose: () => void }) {
       {plan.unresolved > 0 && (
         <p className="mt-4 text-xs text-ink-faint">
           {plan.unresolved.toLocaleString('es-ES')} se quedan como están (conceptos sin pista, como «Dinero» o un nombre que no se reconoce). Para esos, una
-          regla en Categorías → Reglas los clasificará siempre, también los que lleguen después.
+          regla en Categorías → Reglas los clasificará siempre, también los que lleguen después; o clasifícalos de uno en uno, jugando, en Clasificar.
         </p>
       )}
     </Modal>
