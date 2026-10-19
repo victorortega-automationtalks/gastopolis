@@ -1,13 +1,27 @@
 import clsx from 'clsx'
-import { Flame, Gamepad2, PartyPopper, SkipForward, Sparkles, Trophy, Undo2 } from 'lucide-react'
+import {
+  Banknote,
+  CalendarDays,
+  Crown,
+  Flame,
+  Gamepad2,
+  Landmark,
+  MessageCircle,
+  PartyPopper,
+  SkipForward,
+  Sparkles,
+  Trophy,
+  Undo2,
+  Wallet,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { useCategories, useRawMovements, useRules } from '../../data/hooks'
+import { useAccounts, useCategories, useRawMovements, useRules } from '../../data/hooks'
 import { createRule, deleteRule, ensureAutoCategory, recategorize, reserveCategoryIds, restoreMovements } from '../../data/repo'
 import { paletteColor, withAlpha } from '../../lib/color'
-import { autoContext } from '../../model/autocat'
+import { autoContext, classify } from '../../model/autocat'
 import { fmtDate } from '../../model/format'
-import { buildDeck, cardOptions, cardPoints, type SortCard, type SortOption } from '../../model/sortGame'
-import type { Movement } from '../../model/types'
+import { buildDeck, cardOptions, cardPoints, cardQuip, cheer, levelFor, longDate, type SortCard, type SortOption } from '../../model/sortGame'
+import type { Account, Movement } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, Money } from '../../ui/components/primitives'
 import { CategoryIcon } from '../../ui/icons'
@@ -30,6 +44,7 @@ export function SortScreen() {
   const { movements, loading } = useRawMovements()
   const categories = useCategories()
   const rules = useRules()
+  const accounts = useAccounts()
   const toast = useUI((s) => s.toast)
 
   const reserve = useMemo(() => reserveCategoryIds(categories), [categories])
@@ -46,6 +61,10 @@ export function SortScreen() {
   const [leaving, setLeaving] = useState<'fly' | 'skip' | null>(null)
   const [fly, setFly] = useState<CSSProperties>()
   const [pop, setPop] = useState<{ id: number; text: string } | null>(null)
+  const [banner, setBanner] = useState<{ id: number; text: string; sub?: string } | null>(null)
+  const [confetti, setConfetti] = useState<{ id: number; x: number; y: number; color: string } | null>(null)
+  const level = levelFor(score)
+  const lastLevel = useRef(0)
   // Lo pendiente al empezar, para la barra de progreso de esta partida.
   const [start, setStart] = useState<number | null>(null)
   if (start === null && !loading && categories.length) setStart(pending)
@@ -54,6 +73,28 @@ export function SortScreen() {
   const visible = deck.filter((c) => !skipped.includes(cardKey(c)))
   const card = visible[0] ?? deck[0]
   const options = useMemo(() => (card ? cardOptions(card, movements, categories, reserve, ctx) : []), [card, movements, categories, reserve, ctx])
+  // Lo que cuenta la carta: de qué cuentas viene y un chascarrillo según lo que parece.
+  const story = useMemo(() => {
+    if (!card) return null
+    const ids = new Set(card.ids)
+    const byId = new Map(accounts.map((a) => [a.id, a]))
+    const accs = new Map<string, Account>()
+    let loose = 0
+    for (const m of movements)
+      if (ids.has(m.id)) {
+        const a = m.accountId ? byId.get(m.accountId) : undefined
+        if (a) accs.set(a.id, a)
+        else loose++
+      }
+    const autoKey = classify({ concept: card.samples[0], amount: card.kind === 'expense' ? -1 : 1 }, ctx)?.key
+    return { accounts: [...accs.values()], loose, quip: cardQuip(card, autoKey) }
+  }, [card, accounts, movements, ctx])
+
+  // Subida de nivel: cartel a lo grande.
+  useEffect(() => {
+    if (level.index > lastLevel.current) setBanner({ id: Date.now(), text: '¡Nuevo nivel!', sub: level.name })
+    lastLevel.current = level.index
+  }, [level.index, level.name])
 
   const cardRef = useRef<HTMLDivElement>(null)
   const otherRef = useRef<HTMLDivElement>(null)
@@ -73,16 +114,13 @@ export function SortScreen() {
         })
       setLeaving('fly')
       const points = cardPoints(card.ids.length, streak)
-      setPop({
-        id: Date.now(),
-        text: `+${points}${
-          streak >= 2
-            ? ` · racha ×${Math.min(3, 1 + streak * 0.25)
-                .toFixed(2)
-                .replace(/\.?0+$/, '')}`
-            : ''
-        }`,
-      })
+      const c = cheer(streak + 1, card.key)
+      // Las rachas redondas, con cartel grande; el resto, la frase y los puntos sobre la carta.
+      if (c.big) setBanner({ id: Date.now(), text: c.text, sub: `+${points} puntos` })
+      else setPop({ id: Date.now(), text: `${c.text} +${points}` })
+      // Confeti del color de la categoría, desde el botón elegido.
+      if (to)
+        setConfetti({ id: Date.now(), x: to.left + to.width / 2, y: to.top + to.height / 2, color: target?.style.getPropertyValue('--c') || 'var(--accent-2)' })
       try {
         const categoryId = opt.categoryId ?? (opt.auto ? await ensureAutoCategory(opt.auto) : undefined)
         if (!categoryId) return
@@ -149,6 +187,16 @@ export function SortScreen() {
 
   return (
     <div className="mx-auto grid max-w-3xl gap-4">
+      {banner && (
+        <div
+          key={banner.id}
+          className="sort-banner pointer-events-none fixed top-1/3 left-1/2 z-[70] rounded-2xl bg-gradient-to-r from-accent to-accent-2 px-8 py-4 text-center text-white shadow-2xl"
+        >
+          <div className="font-display text-3xl font-bold whitespace-nowrap">{banner.text}</div>
+          {banner.sub && <div className="mt-1 text-sm font-medium opacity-90">{banner.sub}</div>}
+        </div>
+      )}
+      {confetti && <Confetti key={confetti.id} x={confetti.x} y={confetti.y} color={confetti.color} />}
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <div className="min-w-48 flex-1">
@@ -161,6 +209,14 @@ export function SortScreen() {
             </div>
           </div>
           <div className="flex items-center gap-5">
+            <div className="min-w-32" title={level.next ? `Siguiente nivel a ${level.next} puntos` : 'Nivel máximo'}>
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                <Crown size={15} className="text-warn" /> {level.name}
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                <div className="h-full rounded-full bg-warn transition-all duration-700" style={{ width: `${level.progress * 100}%` }} />
+              </div>
+            </div>
             <div className="text-center">
               <div className="num text-lg font-semibold text-ink">{score.toLocaleString('es-ES')}</div>
               <div className="text-[10px] tracking-wider text-ink-faint uppercase">puntos</div>
@@ -217,10 +273,20 @@ export function SortScreen() {
               className={clsx('relative z-[1] w-full max-w-md', leaving === 'skip' ? 'sort-skip' : leaving ? '' : 'sort-enter')}
             >
               <div className={clsx(!leaving && 'sort-bounce')} style={{ animationDelay: '0.9s' }}>
-                <SortCardView card={card} />
+                <SortCardView card={card} accounts={story?.accounts ?? []} loose={story?.loose ?? 0} />
               </div>
             </div>
             <div className="sort-shadow mt-3 h-3 w-64 rounded-[50%] bg-black/50 blur-[6px]" style={{ animationDelay: '0.9s' }} />
+            {story && !leaving && (
+              <div
+                key={`q-${cardKey(card)}`}
+                className="sort-quip relative mt-3 flex max-w-md items-start gap-2 rounded-2xl border border-line-strong bg-surface-solid px-4 py-2.5 text-sm text-ink-muted italic shadow-lg"
+              >
+                <span className="absolute -top-1.5 left-8 h-3 w-3 rotate-45 border-t border-l border-line-strong bg-surface-solid" />
+                <MessageCircle size={15} className="mt-0.5 shrink-0 text-accent-2" />
+                {story.quip}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -290,9 +356,45 @@ export function SortScreen() {
   )
 }
 
-function SortCardView({ card }: { card: SortCard }) {
+/** Explosión de confeti: piezas que salen del botón elegido en abanico (posiciones fijas, sin aleatoriedad). */
+function Confetti({ x, y, color }: { x: number; y: number; color: string }) {
+  const pieces = Array.from({ length: 18 }, (_, i) => {
+    const angle = (i / 18) * Math.PI * 2
+    const dist = 60 + (i % 3) * 28
+    return {
+      dx: Math.cos(angle) * dist,
+      dy: Math.sin(angle) * dist - 30,
+      r: (i % 2 ? 1 : -1) * (180 + i * 20),
+      c: i % 3 === 0 ? 'var(--accent-2)' : i % 3 === 1 ? color : 'var(--warn)',
+    }
+  })
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[65]">
+      {pieces.map((p, i) => (
+        <span
+          key={i}
+          className="sort-confetti absolute block h-2 w-1.5 rounded-sm"
+          style={{ left: x, top: y, background: p.c, '--dx': `${p.dx}px`, '--dy': `${p.dy}px`, '--r': `${p.r}deg` } as CSSProperties}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SortCardView({ card, accounts, loose }: { card: SortCard; accounts: Account[]; loose: number }) {
   const n = card.ids.length
   const accent = card.kind === 'expense' ? 'var(--expense)' : 'var(--income)'
+  const when =
+    n === 1 || card.from === card.to
+      ? longDate(card.to)
+      : `${n} veces entre el ${fmtDate(card.from)} y el ${fmtDate(card.to)} · la última, el ${longDate(card.to)}`
+  const AccIcon = accounts[0]?.kind === 'cash' ? Banknote : accounts[0]?.bank ? Landmark : Wallet
+  const where = accounts.length
+    ? `${accounts
+        .slice(0, 2)
+        .map((a) => (a.bank ? `${a.name} (${a.bank.aspsp.name})` : a.name))
+        .join(' y ')}${accounts.length > 2 ? ` y ${accounts.length - 2} más` : ''}${loose ? ` · ${loose} sin cuenta` : ''}`
+    : 'Sin cuenta: importado o apuntado a mano'
   return (
     <div className="glass overflow-hidden rounded-2xl shadow-2xl" style={{ borderColor: `color-mix(in oklab, ${accent} 45%, transparent)` }}>
       <div className="h-1.5" style={{ background: accent }} />
@@ -305,9 +407,16 @@ function SortCardView({ card }: { card: SortCard }) {
         </div>
         <div className="font-display text-xl leading-tight font-semibold break-words text-ink">{card.samples[0]}</div>
         {card.samples.length > 1 && <div className="truncate text-xs text-ink-faint">También: {card.samples.slice(1, 4).join(' · ')}</div>}
-        <div className="flex items-end justify-between gap-3">
-          <Money value={card.total} kind="auto" className="text-2xl font-semibold" />
-          <span className="num text-xs text-ink-faint">{card.from === card.to ? fmtDate(card.from) : `${fmtDate(card.from)} – ${fmtDate(card.to)}`}</span>
+        <Money value={card.total} kind="auto" className="block text-2xl font-semibold" />
+        <div className="space-y-1 border-t border-line pt-3 text-xs text-ink-muted">
+          <div className="flex items-start gap-1.5">
+            <CalendarDays size={13} className="mt-0.5 shrink-0 text-ink-faint" />
+            <span className="first-letter:uppercase">{when}</span>
+          </div>
+          <div className="flex items-start gap-1.5">
+            <AccIcon size={13} className="mt-0.5 shrink-0 text-ink-faint" />
+            <span>{where}</span>
+          </div>
         </div>
       </div>
     </div>
