@@ -1,5 +1,6 @@
 import { normalizeKey } from '../lib/text'
 import { signFor } from '../model/aggregate'
+import { classify, type AutoContext } from '../model/autocat'
 import type { CompiledRules } from '../model/rules'
 import type { Account, BankLink, Category, ISODate, Kind, Movement } from '../model/types'
 import type { EbSession, EbTransaction } from './enablebanking'
@@ -157,9 +158,14 @@ export interface Categorizer {
   /** Movimientos ya guardados, para repetir la categoría que tuvo el mismo concepto. */
   history: Movement[]
   fallback: { expense: string; income: string }
+  /** Clasificación automática (catálogo de comercios y pistas de tus datos) y el id de cada categoría propuesta. */
+  auto?: { ctx: AutoContext; ids: Map<string, string> }
 }
 
-/** Categoría para un movimiento nuevo: reglas, luego la última que tuvo ese concepto con el mismo sentido, luego «sin clasificar». */
+/**
+ * Categoría para un movimiento nuevo: tus reglas; luego la que tuvo ese concepto (con el mismo sentido) si la elegiste
+ * tú o el catálogo, no si se quedó «sin clasificar»; luego la clasificación automática; y si no, «sin clasificar».
+ */
 export function categorize(d: Draft, c: Categorizer): Category {
   const byId = new Map(c.categories.map((x) => [x.id, x]))
   const sign: Kind = d.amount < 0 ? 'expense' : 'income'
@@ -167,7 +173,8 @@ export function categorize(d: Draft, c: Categorizer): Category {
   const byRule = byId.get(c.rules.categoryFor(d.concept, sign, d.amount) ?? '')
   if (fits(byRule)) return byRule!
   const key = normalizeKey(d.concept)
-  const sameSign = (m: Movement) => Math.sign(m.amount) === Math.sign(d.amount)
+  const reserve = new Set([c.fallback.expense, c.fallback.income])
+  const sameSign = (m: Movement) => Math.sign(m.amount) === Math.sign(d.amount) && !reserve.has(m.categoryId)
   // Igual, o el mismo comercio escrito de otra forma («Mercadona S.A.» y «Mercadona»): uno empieza por el otro, o
   // comparten la primera palabra (de 4 letras o más).
   const first = key.split(' ')[0]
@@ -177,6 +184,9 @@ export function categorize(d: Draft, c: Categorizer): Category {
     (first.length >= 4 ? c.history.find((m) => sameSign(m) && m.conceptKey.split(' ')[0] === first) : undefined)
   const byHistory = byId.get(prev?.categoryId ?? '')
   if (fits(byHistory)) return byHistory!
+  const guess = c.auto && classify(d, c.auto.ctx)
+  const byAuto = guess && byId.get(c.auto!.ids.get(guess.key) ?? '')
+  if (fits(byAuto)) return byAuto!
   return byId.get(c.fallback[sign])!
 }
 

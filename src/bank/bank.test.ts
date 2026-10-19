@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { autoContext } from '../model/autocat'
 import { compileRules } from '../model/rules'
 import type { Category, Movement, Rule } from '../model/types'
 import { ebClient, EbError, parseCallback, type EbRequest, type EbTransaction } from './enablebanking'
@@ -158,6 +159,21 @@ describe('sincronización: del banco a movimientos', () => {
       ['otros-ing', 20],
       ['super', -31],
     ])
+  })
+
+  it('lo que tu historial deja «sin clasificar» lo resuelve la clasificación automática; lo que elegiste tú, no', () => {
+    const history = [
+      mv({ id: 'h', date: '2026-09-01', amount: -30, concept: 'Repsol', conceptKey: 'repsol', categoryId: 'sin' }),
+      mv({ id: 'h2', date: '2026-09-01', amount: -12, concept: 'Shell', conceptKey: 'shell', categoryId: 'super' }),
+    ]
+    const drafts = toDrafts([
+      tx({ amount: '40', entry_reference: 'A', remittance_information: ['REPSOL'] }),
+      tx({ amount: '15', entry_reference: 'B', remittance_information: ['SHELL'] }),
+      tx({ amount: '9', entry_reference: 'C', remittance_information: ['CONCEPTO RARO'] }),
+    ])
+    const auto = { ctx: autoContext([]), ids: new Map([['fuel', 'gasolina']]) }
+    const plan = reconcile(drafts, { id: 'bbva' }, history, [], { ...categorizer(history), categories: [...categories, cat('gasolina', 'expense')], auto }, 0)
+    expect(plan.added.map((m) => m.categoryId)).toEqual(['gasolina', 'super', 'sin'])
   })
 
   it('detecta traspasos entre tus cuentas para que no cuenten como gasto e ingreso', () => {

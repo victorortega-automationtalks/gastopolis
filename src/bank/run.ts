@@ -1,13 +1,26 @@
 import { db } from '../data/db'
-import { applyBankSync, bankFallbacks, createAccount, updateBankLink } from '../data/repo'
+import { applyBankSync, bankFallbacks, createAccount, ensureAutoCategory, updateBankLink } from '../data/repo'
 import { errorMessage } from '../lib/errors'
 import { newId } from '../lib/id'
+import { autoContext, classify } from '../model/autocat'
 import { isoOf } from '../model/period'
 import { compileRules } from '../model/rules'
 import type { BankLink, BankSecret, Movement } from '../model/types'
 import { bankAuthWindow, bankRequest, bankSupported, openExternal } from '../platform'
 import { ebClient, EbError, parseCallback, type Aspsp, type EbClient, type EbSession, type EbTransport } from './enablebanking'
-import { consentLimit, consentUntil, fetchRange, internalTransfers, isDue, manualSync, reconcile, toDrafts, type OfferedAccount } from './sync'
+import {
+  categorize,
+  consentLimit,
+  consentUntil,
+  fetchRange,
+  internalTransfers,
+  isDue,
+  manualSync,
+  reconcile,
+  toDrafts,
+  type Categorizer,
+  type OfferedAccount,
+} from './sync'
 
 export { offeredAccounts, type OfferedAccount } from './sync'
 
@@ -80,6 +93,7 @@ export async function syncAccount(accountId: string, opts: { manual?: boolean } 
     const txs = await client.transactions(account.bank.accountUid, range)
     const balance = await client.balance(account.bank.accountUid).catch(() => undefined)
     const fallback = await bankFallbacks()
+    const drafts = toDrafts(txs)
     const [existing, categories, rules, accounts] = await Promise.all([
       db.movements.toArray(),
       db.categories.toArray(),
@@ -87,7 +101,18 @@ export async function syncAccount(accountId: string, opts: { manual?: boolean } 
       db.accounts.toArray(),
     ])
     const history = [...existing].sort((a, b) => (a.date < b.date ? 1 : -1))
-    const plan = reconcile(toDrafts(txs), account, existing, accounts, { rules: compileRules(rules, categories), categories, history, fallback })
+    const base: Categorizer = { rules: compileRules(rules, categories), categories, history, fallback }
+    // Clasificación automática para lo que tus reglas y tu historial no resuelven: pistas de todo lo que hay (tu
+    // nombre, quién te paga) y solo se crean las categorías que de verdad se van a usar.
+    const ctx = autoContext([...existing, ...drafts])
+    const ids = new Map<string, string>()
+    const reserve = new Set([fallback.expense, fallback.income])
+    for (const d of drafts) {
+      const auto = classify(d, ctx)
+      if (auto && !ids.has(auto.key) && reserve.has(categorize(d, base).id)) ids.set(auto.key, await ensureAutoCategory(auto))
+    }
+    const cats = ids.size ? await db.categories.toArray() : categories
+    const plan = reconcile(drafts, account, existing, accounts, { ...base, categories: cats, auto: { ctx, ids } })
     for (const m of plan.added) m.id = newId()
     // Traspasos entre cuentas propias: lo nuevo contra lo reciente de todas las cuentas del banco.
     const banks = new Set(accounts.filter((a) => a.bank).map((a) => a.id))

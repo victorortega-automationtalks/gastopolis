@@ -2,6 +2,7 @@ import { paletteColor } from '../lib/color'
 import { newId } from '../lib/id'
 import { normalizeKey } from '../lib/text'
 import { signFor } from '../model/aggregate'
+import { findCategory, type AutoCategory, type AutoGroup } from '../model/autocat'
 import { DEFAULT_SETTINGS, guessIcon } from '../model/defaults'
 import { previewRules } from '../model/rules'
 import type {
@@ -571,6 +572,21 @@ async function ensureCategory(name: string, kind: Kind): Promise<string> {
   const found = (await db.categories.toArray()).find((c) => c.kind === kind && normalizeKey(c.name) === key)
   if (found) return found.id
   return createCategory({ name, kind })
+}
+
+/** La categoría de una propuesta automática: la que ya tengas con ese nombre (o un sinónimo) o una nueva. */
+export async function ensureAutoCategory(auto: AutoCategory): Promise<string> {
+  return findCategory(auto, await db.categories.toArray()) ?? createCategory({ name: auto.name, kind: auto.kind })
+}
+
+/** Aplica lo elegido de «Asignar automáticamente»: crea las categorías que falten y mueve cada grupo a la suya. */
+export async function applyAutoAssign(groups: Pick<AutoGroup, 'auto' | 'ids'>[]): Promise<number> {
+  let n = 0
+  for (const g of groups) {
+    await recategorize(g.ids, await ensureAutoCategory(g.auto))
+    n += g.ids.length
+  }
+  return n
 }
 
 export const BANK_CATEGORIES = {

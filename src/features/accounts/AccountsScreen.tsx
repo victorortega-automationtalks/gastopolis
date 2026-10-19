@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { AlertTriangle, Banknote, KeyRound, Landmark, Plus, RefreshCw, Trash2, Wallet, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Banknote, KeyRound, Landmark, Plus, RefreshCw, Trash2, Wallet, Wand2, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { bankEnabled, syncAccounts, syncAccount } from '../../bank/run'
 import { consentState, manualSync, MIN_AUTO_HOURS } from '../../bank/sync'
@@ -9,6 +9,7 @@ import { fmtDate } from '../../model/format'
 import type { Account, AccountKind } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, Field, Modal, Money, Segmented } from '../../ui/components/primitives'
+import { AutoAssign } from './AutoAssign'
 import { BankSetup } from './BankSetup'
 import { ConnectBank } from './ConnectBank'
 
@@ -48,6 +49,7 @@ export function AccountsScreen() {
   const [connect, setConnect] = useState<{ renew?: { name: string; country: string } } | null>(null)
   const [adding, setAdding] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [autoAssign, setAutoAssign] = useState(false)
   const now = useNow()
 
   const stats = useMemo(() => {
@@ -61,6 +63,7 @@ export function AccountsScreen() {
     }
     return m
   }, [movements])
+  const fromBank = useMemo(() => movements.some((m) => m.source === 'bank'), [movements])
   const unassigned = movements.length - [...stats.values()].reduce((n, s) => n + s.n, 0)
   const banks = accounts.filter((a) => a.bank)
   const others = accounts.filter((a) => !a.bank)
@@ -155,6 +158,14 @@ export function AccountsScreen() {
           </div>
         )}
 
+        {fromBank && (
+          <div className="mt-3">
+            <Button onClick={() => setAutoAssign(true)} className="h-auto min-h-9 py-2 text-left">
+              <Wand2 size={15} /> Asignar automáticamente las categorías a registros del banco
+            </Button>
+          </div>
+        )}
+
         {bankEnabled && secret && (
           <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-line pt-4">
             <Field
@@ -218,6 +229,7 @@ export function AccountsScreen() {
       {setup && <BankSetup open onClose={() => setSetup(false)} onReady={() => setSetup(false)} />}
       {connect && <ConnectBank open onClose={() => setConnect(null)} renew={connect.renew} />}
       {adding && <AddAccount onClose={() => setAdding(false)} />}
+      {autoAssign && <AutoAssign onClose={() => setAutoAssign(false)} />}
     </div>
   )
 }
