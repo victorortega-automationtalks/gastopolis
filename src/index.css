@@ -212,6 +212,20 @@ body {
   animation: sort-skip 0.35s ease-in forwards;
 }
 
+/*
+ * Listas de los desplegables (<select>). Las pinta el sistema: con el fondo semitransparente de .field, Windows
+ * (WebView2/Chromium) las dibuja blancas mientras el texto hereda el color claro del tema y no se lee. Fondo y texto
+ * opacos del tema en cada opción.
+ */
+select option,
+select optgroup {
+  background-color: var(--surface-solid);
+  color: var(--ink);
+}
+select option:disabled {
+  color: var(--ink-faint);
+}
+
 /* Scrollbars discretas */
 * {
   scrollbar-width: thin;
