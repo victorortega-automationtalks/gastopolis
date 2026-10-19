@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Lo mínimo: la ventana principal y nada más. El guardado de archivos va por un comando propio.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -2,19 +2,29 @@
 
 Tu dinero como una ciudad en 3D. Importa tu Excel de gastos y explóralo bloque a bloque, fija objetivos de ahorro, caza fugas de dinero y simula decisiones antes de tomarlas.
 
-Local-first: todo se guarda en el dispositivo (IndexedDB). Sin cuentas ni servidores.
+**100 % privada:** todo se guarda en tu dispositivo. Sin cuentas, sin servidores, sin conexión: la app no tiene forma de enviar tus datos a ningún sitio.
 
-> Estado: **fase 4 de 6** — Inicio, Ciudad, Cordillera y Balanza en 3D, Objetivos, Detector de fugas, reglas, importador, movimientos, categorías y ajustes. Plan completo en [`docs/DESIGN.md`](docs/DESIGN.md).
+> Estado: **fase 4 de 6, más la distribución de la 6** (Windows + iPhone) — Inicio, Ciudad, Cordillera y Balanza en 3D, Objetivos, Detector de fugas, reglas, importador, movimientos, categorías y ajustes. Plan completo en [`docs/DESIGN.md`](docs/DESIGN.md).
 >
 > La app arranca **vacía**: nada de lo que hay en el repositorio son datos reales. Los datos de ejemplo son inventados y solo se cargan si pulsas «Ver con datos de ejemplo».
 
-## Arrancar
+## Instalar
+
+- **Windows:** descarga `Gastopolis_x.y.z_x64-setup.exe` de la última release y ejecútalo (no pide permisos de administrador). Al no estar firmado, Windows avisa la primera vez: «Más información» → «Ejecutar de todas formas».
+- **iPhone:** abre la web app en Safari → Compartir → «Añadir a pantalla de inicio». Desde ahí se abre como una app, sin barras del navegador, y funciona sin conexión.
+- **Pasar datos del PC al iPhone (o al revés):** Ajustes → «Hacer copia» (cifrada con contraseña) y en el otro dispositivo «Restaurar copia».
+
+Para publicar una versión: sube una etiqueta `v*` (`git tag v0.6.0 && git push origin v0.6.0`) y GitHub compila el instalador y la web app en un borrador de release.
+
+## Desarrollar
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
 npm test           # Vitest: importador, repositorio, consultas
 npm run build      # tsc + build de producción en dist/
+npm run app:dev    # la app de escritorio (Tauri) con recarga en caliente
+npm run app:build:windows   # instalador de Windows desde Linux (cargo-xwin + nsis)
 ```
 
 ## Qué hace ya
@@ -28,11 +38,11 @@ npm run build      # tsc + build de producción en dist/
 - **Importar Excel/CSV** (`.xlsx`, `.xlsm`, `.xls`, `.csv`): detecta tablas de movimientos aunque estén una al lado de otra, propone el mapeo de columnas, convierte Ahorro/Cripto en transferencias, avisa de filas que no puede leer y no duplica si reimportas. Cada importación se puede deshacer.
 - **Movimientos**: tabla virtualizada, filtros por periodo, tipo y texto; edición, alta rápida (sugiere la categoría y recuerda tus conceptos habituales) y acciones en bloque con deshacer.
 - **Categorías y reglas**: jerarquía, color, icono, presupuesto mensual, cambio de tipo y fusión. Reglas «si el concepto contiene X → categoría» que se aplican al importar y al apuntar.
-- **Ajustes**: moneda, inicio del año, tema Neón/Polar, umbrales del detector de fugas, copia de seguridad JSON, CSV, datos de ejemplo.
+- **Ajustes**: moneda, inicio del año, tema Neón/Polar, umbrales del detector de fugas, copias de seguridad cifradas con contraseña (con aviso si hace mucho de la última), CSV, datos de ejemplo.
 
 ## Stack
 
-React 19 · TypeScript · Vite · Tailwind 4 · Zustand · Dexie · SheetJS · three.js con react-three-fiber, drei y postprocessing · d3-hierarchy · Recharts · (fase 6) Capacitor.
+React 19 · TypeScript · Vite · Tailwind 4 · Zustand · Dexie · SheetJS · three.js con react-three-fiber, drei y postprocessing · d3-hierarchy · Recharts · Tauri 2 (Windows) · vite-plugin-pwa (iPhone).
 
 ## Estructura
 
@@ -45,4 +55,6 @@ src/
   features/    pantallas: city, import, movements, categories, settings…
   ui/          shell, navegación, componentes base, iconos
   store/       estado de UI (Zustand): ruta, filtros, modales, avisos
+  platform/    lo que cambia entre navegador y app de Windows: guardar archivos, service worker
+src-tauri/     la app de Windows (Tauri): ventana, «Guardar como», CSP
 ```

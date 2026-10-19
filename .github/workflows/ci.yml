@@ -1,0 +1,53 @@
+name: Comprobaciones
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tipos
+        run: npx tsc -b
+      - name: Tests
+        run: npx vitest run
+      - name: Lint
+        run: npx oxlint src
+      - name: Formato
+        run: npx prettier --check "src/**/*.{ts,tsx,css}"
+      - name: Build
+        run: npx vite build
+
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Dependencias del WebView de Linux
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev
+      - name: Formato Rust
+        run: cargo fmt --check
+        working-directory: src-tauri
+      - name: Clippy
+        # Tauri exige que exista dist/ al compilar; para comprobar el código Rust basta una carpeta vacía.
+        run: mkdir -p ../dist && cargo clippy -- -D warnings
+        working-directory: src-tauri
