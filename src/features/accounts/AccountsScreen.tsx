@@ -1,16 +1,18 @@
 import clsx from 'clsx'
-import { AlertTriangle, Banknote, KeyRound, Landmark, Plus, RefreshCw, Trash2, Wallet, type LucideIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { AlertTriangle, Banknote, KeyRound, Landmark, Plus, RefreshCw, Gamepad2, Trash2, Wallet, Wand2, type LucideIcon } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { bankEnabled, syncAccounts, syncAccount } from '../../bank/run'
-import { consentState, MIN_AUTO_HOURS } from '../../bank/sync'
+import { consentState, manualSync, MIN_AUTO_HOURS } from '../../bank/sync'
 import { useAccounts, useBankSecret, useRawMovements, useSettings } from '../../data/hooks'
 import { createAccount, deleteAccount, deleteBankSecret, saveSettings, updateAccount } from '../../data/repo'
 import { fmtDate } from '../../model/format'
 import type { Account, AccountKind } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, Field, Modal, Money, Segmented } from '../../ui/components/primitives'
+import { AutoAssign } from './AutoAssign'
 import { BankSetup } from './BankSetup'
 import { ConnectBank } from './ConnectBank'
+import { PanelGuide } from './PanelGuide'
 
 const KIND_ICON: Record<AccountKind, LucideIcon> = { cash: Banknote, bank: Landmark, other: Wallet }
 const KIND_LABEL: Record<AccountKind, string> = { cash: 'Efectivo', bank: 'Banco', other: 'Otra' }
@@ -23,16 +25,34 @@ const ago = (ms: number) => {
   return h < 48 ? `hace ${h} h` : `hace ${Math.round(h / 24)} días`
 }
 
+const hour = (ms: number) => new Date(ms).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+
+/** Cuándo se puede volver a sincronizar a mano: «mañana a las 10:30» u «hoy a las 22:00». */
+const nextManual = (ms: number, now: number) => `${new Date(ms).toDateString() === new Date(now).toDateString() ? 'hoy' : 'mañana'} a las ${hour(ms)}`
+
+/** La hora, al minuto: para que los botones de sincronizar se reactiven solos. */
+function useNow(): number {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(t)
+  }, [])
+  return now
+}
+
 export function AccountsScreen() {
   const accounts = useAccounts()
   const { movements } = useRawMovements()
   const secret = useBankSecret()
   const settings = useSettings()
   const toast = useUI((s) => s.toast)
+  const navigate = useUI((s) => s.navigate)
   const [setup, setSetup] = useState(false)
   const [connect, setConnect] = useState<{ renew?: { name: string; country: string } } | null>(null)
   const [adding, setAdding] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [autoAssign, setAutoAssign] = useState(false)
+  const now = useNow()
 
   const stats = useMemo(() => {
     const m = new Map<string, { n: number; net: number }>()
@@ -45,13 +65,18 @@ export function AccountsScreen() {
     }
     return m
   }, [movements])
+  const fromBank = useMemo(() => movements.some((m) => m.source === 'bank'), [movements])
   const unassigned = movements.length - [...stats.values()].reduce((n, s) => n + s.n, 0)
   const banks = accounts.filter((a) => a.bank)
   const others = accounts.filter((a) => !a.bank)
+  // Forzar a mano: una vez al día por cuenta. El botón general vale mientras quede alguna por forzar hoy.
+  const manual = banks.filter((a) => !a.archived).map((a) => manualSync(a.bank!, now))
+  const canForce = manual.some((m) => m.ok)
+  const forceAgain = manual.reduce<number | undefined>((t, m) => (m.nextAt && (!t || m.nextAt < t) ? m.nextAt : t), undefined)
 
   const syncAll = async () => {
     setSyncing(true)
-    const out = await syncAccounts({ force: true })
+    const out = await syncAccounts({ manual: true })
     setSyncing(false)
     const added = out.reduce((n, o) => n + o.added, 0)
     const failed = out.filter((o) => o.error)
@@ -76,8 +101,25 @@ export function AccountsScreen() {
           {bankEnabled && (
             <div className="flex flex-wrap gap-2">
               {secret && banks.length > 0 && (
-                <Button onClick={() => void syncAll()} disabled={syncing}>
-                  <RefreshCw size={15} className={clsx(syncing && 'animate-spin')} /> {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}
+                <Button
+                  onClick={() => void syncAll()}
+                  disabled={syncing || !canForce}
+                  title={
+                    canForce
+                      ? 'Trae ya lo nuevo de tus bancos (una vez al día)'
+                      : forceAgain
+                        ? `Ya forzada hoy: otra vez ${nextManual(forceAgain, now)}`
+                        : undefined
+                  }
+                >
+                  <RefreshCw size={15} className={clsx(syncing && 'animate-spin')} />{' '}
+                  {syncing
+                    ? 'Sincronizando…'
+                    : canForce
+                      ? 'Forzar sincronización'
+                      : forceAgain
+                        ? `Otra vez ${nextManual(forceAgain, now)}`
+                        : 'Forzar sincronización'}
                 </Button>
               )}
               {secret ? (
@@ -103,17 +145,39 @@ export function AccountsScreen() {
           </div>
         )}
 
+        {bankEnabled && secret && !banks.length && (
+          <div className="mt-4 space-y-3">
+            <p className="text-sm text-ink-muted">Aún no hay ningún banco conectado en Gastópolis.</p>
+            <PanelGuide compact />
+          </div>
+        )}
+
         {banks.length > 0 && (
           <div className="mt-4 grid gap-2">
             {banks.map((a) => (
-              <BankRow key={a.id} account={a} stats={stats.get(a.id)} onRenew={() => setConnect({ renew: a.bank!.aspsp })} />
+              <BankRow key={a.id} account={a} now={now} stats={stats.get(a.id)} onRenew={() => setConnect({ renew: a.bank!.aspsp })} />
             ))}
+          </div>
+        )}
+
+        {fromBank && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button onClick={() => setAutoAssign(true)} className="h-auto min-h-9 py-2 text-left">
+              <Wand2 size={15} /> Asignar automáticamente las categorías a registros del banco
+            </Button>
+            <Button variant="ghost" onClick={() => navigate('clasificar')}>
+              <Gamepad2 size={15} /> Clasificar jugando
+            </Button>
           </div>
         )}
 
         {bankEnabled && secret && (
           <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-line pt-4">
-            <Field label="Sincronizar solo" group hint="Al abrir la app y cada cierto tiempo. Los bancos permiten 4 lecturas al día sin ti delante.">
+            <Field
+              label="Sincronizar solo"
+              group
+              hint="Al abrir la app y cada cierto tiempo. Los bancos permiten 4 lecturas al día sin ti delante; además puedes forzarla a mano una vez al día."
+            >
               <Segmented<string>
                 value={String(Math.max(MIN_AUTO_HOURS, settings.bankSyncHours ?? 6))}
                 onChange={(v) => void saveSettings({ bankSyncHours: Number(v) })}
@@ -170,19 +234,20 @@ export function AccountsScreen() {
       {setup && <BankSetup open onClose={() => setSetup(false)} onReady={() => setSetup(false)} />}
       {connect && <ConnectBank open onClose={() => setConnect(null)} renew={connect.renew} />}
       {adding && <AddAccount onClose={() => setAdding(false)} />}
+      {autoAssign && <AutoAssign onClose={() => setAutoAssign(false)} />}
     </div>
   )
 }
 
-function BankRow({ account: a, stats, onRenew }: { account: Account; stats?: { n: number }; onRenew: () => void }) {
+function BankRow({ account: a, now, stats, onRenew }: { account: Account; now: number; stats?: { n: number }; onRenew: () => void }) {
   const toast = useUI((s) => s.toast)
   const [busy, setBusy] = useState(false)
-  const [now] = useState(Date.now)
   const bank = a.bank!
   const consent = consentState(bank, now)
+  const manual = manualSync(bank, now)
   const sync = async () => {
     setBusy(true)
-    const r = await syncAccount(a.id)
+    const r = await syncAccount(a.id, { manual: true })
     setBusy(false)
     toast(r.error ?? `${a.name}: ${r.added} movimientos nuevos`, r.error ? 'error' : 'ok')
   }
@@ -205,7 +270,15 @@ function BankRow({ account: a, stats, onRenew }: { account: Account; stats?: { n
         )}
         <div className="flex gap-1.5">
           {consent.state !== 'expired' && (
-            <Button size="sm" onClick={() => void sync()} disabled={busy} aria-label={`Sincronizar ${a.name}`}>
+            <Button
+              size="sm"
+              onClick={() => void sync()}
+              disabled={busy || !manual.ok}
+              aria-label={`Sincronizar ${a.name}`}
+              title={
+                manual.ok ? 'Sincronizar ahora (una vez al día)' : manual.nextAt ? `Ya forzada hoy: otra vez ${nextManual(manual.nextAt, now)}` : undefined
+              }
+            >
               <RefreshCw size={14} className={clsx(busy && 'animate-spin')} />
             </Button>
           )}

@@ -1,12 +1,26 @@
 import { db } from '../data/db'
-import { applyBankSync, bankFallbacks, createAccount, updateBankLink } from '../data/repo'
+import { applyBankSync, bankFallbacks, createAccount, ensureAutoCategory, updateBankLink } from '../data/repo'
+import { errorMessage } from '../lib/errors'
 import { newId } from '../lib/id'
+import { autoContext, classify } from '../model/autocat'
 import { isoOf } from '../model/period'
 import { compileRules } from '../model/rules'
 import type { BankLink, BankSecret, Movement } from '../model/types'
-import { bankRequest, bankSupported, cancelBankCallback, openExternal, waitBankCallback } from '../platform'
+import { bankAuthWindow, bankRequest, bankSupported, openExternal } from '../platform'
 import { ebClient, EbError, parseCallback, type Aspsp, type EbClient, type EbSession, type EbTransport } from './enablebanking'
-import { consentUntil, fetchRange, internalTransfers, isDue, reconcile, toDrafts, type OfferedAccount } from './sync'
+import {
+  categorize,
+  consentLimit,
+  consentUntil,
+  fetchRange,
+  internalTransfers,
+  isDue,
+  manualSync,
+  reconcile,
+  toDrafts,
+  type Categorizer,
+  type OfferedAccount,
+} from './sync'
 
 export { offeredAccounts, type OfferedAccount } from './sync'
 
@@ -16,12 +30,18 @@ export { offeredAccounts, type OfferedAccount } from './sync'
  */
 
 /** Banco simulado para desarrollo y pruebas (nunca va en la app que se instala). */
-const MOCK = import.meta.env.VITE_BANK_MOCK === '1'
+const MOCK_MODE = import.meta.env.VITE_BANK_MOCK as string | undefined
+const MOCK = MOCK_MODE === '1' || MOCK_MODE === 'window'
 
 /** La conexión con el banco existe aquí (app de Windows, o el banco simulado). */
 export const bankEnabled = bankSupported || MOCK
 
-export const DEFAULT_REDIRECT = 'http://localhost:47823/callback'
+/**
+ * Dirección de vuelta por defecto. Enable Banking exige https y un dominio de verdad (no acepta localhost). No hace
+ * falta que exista: la ventana del banco de la app la intercepta antes de cargarla. `.invalid` es un dominio reservado
+ * que nunca resuelve, así que, si se usara el navegador, el código tampoco llegaría a ningún servidor.
+ */
+export const DEFAULT_REDIRECT = 'https://gastopolis.invalid/callback'
 
 async function transport(secret: BankSecret): Promise<EbTransport> {
   if (MOCK) return (await import('./mock')).mockTransport
@@ -54,11 +74,17 @@ export interface SyncOutcome {
 
 const busy = new Set<string>()
 
-/** Trae lo nuevo de una cuenta: solo desde unos días antes de lo último traído. */
-export async function syncAccount(accountId: string): Promise<SyncOutcome> {
+/**
+ * Trae lo nuevo de una cuenta: solo desde unos días antes de lo último traído. `manual`: la ha pedido el usuario; se
+ * permite una al día por cuenta (gasta del cupo del banco), y se apunta aunque falle.
+ */
+export async function syncAccount(accountId: string, opts: { manual?: boolean } = {}): Promise<SyncOutcome> {
   const account = await db.accounts.get(accountId)
   if (!account?.bank) throw new Error('Esa cuenta no está conectada a un banco')
   if (busy.has(accountId)) return { account: account.name, added: 0, linked: 0, transfers: 0 }
+  if (opts.manual && !manualSync(account.bank, Date.now()).ok)
+    return { account: account.name, added: 0, linked: 0, transfers: 0, error: 'Ya la has sincronizado a mano hoy: vuelve a probar mañana.' }
+  const manual = opts.manual ? { manualSyncAt: Date.now() } : {}
   busy.add(accountId)
   try {
     const client = await bankClient()
@@ -67,6 +93,7 @@ export async function syncAccount(accountId: string): Promise<SyncOutcome> {
     const txs = await client.transactions(account.bank.accountUid, range)
     const balance = await client.balance(account.bank.accountUid).catch(() => undefined)
     const fallback = await bankFallbacks()
+    const drafts = toDrafts(txs)
     const [existing, categories, rules, accounts] = await Promise.all([
       db.movements.toArray(),
       db.categories.toArray(),
@@ -74,7 +101,18 @@ export async function syncAccount(accountId: string): Promise<SyncOutcome> {
       db.accounts.toArray(),
     ])
     const history = [...existing].sort((a, b) => (a.date < b.date ? 1 : -1))
-    const plan = reconcile(toDrafts(txs), account, existing, accounts, { rules: compileRules(rules, categories), categories, history, fallback })
+    const base: Categorizer = { rules: compileRules(rules, categories), categories, history, fallback }
+    // Clasificación automática para lo que tus reglas y tu historial no resuelven: pistas de todo lo que hay (tu
+    // nombre, quién te paga) y solo se crean las categorías que de verdad se van a usar.
+    const ctx = autoContext([...existing, ...drafts])
+    const ids = new Map<string, string>()
+    const reserve = new Set([fallback.expense, fallback.income])
+    for (const d of drafts) {
+      const auto = classify(d, ctx)
+      if (auto && !ids.has(auto.key) && reserve.has(categorize(d, base).id)) ids.set(auto.key, await ensureAutoCategory(auto))
+    }
+    const cats = ids.size ? await db.categories.toArray() : categories
+    const plan = reconcile(drafts, account, existing, accounts, { ...base, categories: cats, auto: { ctx, ids } })
     for (const m of plan.added) m.id = newId()
     // Traspasos entre cuentas propias: lo nuevo contra lo reciente de todas las cuentas del banco.
     const banks = new Set(accounts.filter((a) => a.bank).map((a) => a.id))
@@ -85,29 +123,27 @@ export async function syncAccount(accountId: string): Promise<SyncOutcome> {
       account.id,
       plan,
       { pairs, categoryId: fallback.transfer },
-      { lastSyncAt: Date.now(), syncedThrough: range.dateTo, lastError: undefined, balance },
+      { lastSyncAt: Date.now(), syncedThrough: range.dateTo, lastError: undefined, balance, ...manual },
     )
     return { account: account.name, added: plan.added.length, linked: plan.linked.length, transfers: pairs.length }
   } catch (e) {
     const expired = e instanceof EbError && e.expired
-    await updateBankLink(accountId, { lastError: (e as Error).message, ...(expired ? { validUntil: new Date().toISOString() } : {}) })
-    return { account: account.name, added: 0, linked: 0, transfers: 0, error: (e as Error).message }
+    await updateBankLink(accountId, { lastError: errorMessage(e), ...manual, ...(expired ? { validUntil: new Date().toISOString() } : {}) })
+    return { account: account.name, added: 0, linked: 0, transfers: 0, error: errorMessage(e) }
   } finally {
     busy.delete(accountId)
   }
 }
 
-/** Sincroniza las cuentas a las que les toca (o todas, si lo pides tú). */
-export async function syncAccounts(opts: { force?: boolean } = {}): Promise<SyncOutcome[]> {
+/** Sincroniza las cuentas a las que les toca o, con `manual`, todas las que aún no se han forzado hoy. */
+export async function syncAccounts(opts: { manual?: boolean } = {}): Promise<SyncOutcome[]> {
   if (!bankEnabled) return []
   const [accounts, settings, secret] = await Promise.all([db.accounts.toArray(), db.settings.get('settings'), db.secrets.get('enablebanking')])
   if (!secret) return []
   const now = Date.now()
-  const due = accounts.filter(
-    (a) => a.bank && !a.archived && (opts.force ? Date.parse(a.bank.validUntil) > now : isDue(a.bank, now, settings?.bankSyncHours ?? 6)),
-  )
+  const due = accounts.filter((a) => a.bank && !a.archived && (opts.manual ? manualSync(a.bank, now).ok : isDue(a.bank, now, settings?.bankSyncHours ?? 6)))
   const out: SyncOutcome[] = []
-  for (const a of due) out.push(await syncAccount(a.id))
+  for (const a of due) out.push(await syncAccount(a.id, { manual: opts.manual }))
   return out
 }
 
@@ -118,43 +154,49 @@ export async function listBanks(country: string): Promise<Aspsp[]> {
   return banks.sort((a, b) => a.name.localeCompare(b.name, 'es'))
 }
 
-/** Puerto de la dirección de vuelta si es local (entonces la app la recoge sola). */
-export function localPort(redirectUrl: string): number | null {
-  try {
-    const u = new URL(redirectUrl)
-    return u.hostname === 'localhost' || u.hostname === '127.0.0.1' ? Number(u.port || (u.protocol === 'https:' ? 443 : 80)) : null
-  } catch {
-    return null
-  }
+export interface AuthHandle {
+  /** Dirección de la página del banco (para abrirla en el navegador si la ventana de la app no sirve). */
+  onUrl?: (url: string) => void
+  /** Si se ha pasado al navegador, cerrar la ventana de la app no cancela: se espera a que se pegue la dirección. */
+  usingBrowser?: () => boolean
 }
 
 /**
- * Abre la página del banco para dar permiso de lectura y espera la vuelta. Si la dirección de vuelta es local, la app
- * la recoge sola; si no (o si el navegador no vuelve), `pasted` resuelve con la dirección que pegue el usuario.
+ * Permiso de lectura en el banco. En Windows, en una ventana de la app que recoge la vuelta sola; si no, o si el
+ * usuario prefiere el navegador, `pasted` resuelve con la dirección que pegue.
  */
-export async function authorize(aspsp: Aspsp, pasted: Promise<string>): Promise<EbSession> {
+export async function authorize(aspsp: Aspsp, pasted: Promise<string>, handle: AuthHandle = {}): Promise<EbSession> {
   const secret = await db.secrets.get('enablebanking')
   if (!secret) throw new Error('Falta configurar Enable Banking')
   const client = await bankClient(secret)
   const state = newId()
-  const url = await client.startAuth({
-    aspsp: { name: aspsp.name, country: aspsp.country },
-    validUntil: consentUntil(Date.now(), aspsp.maximum_consent_validity),
-    redirectUrl: secret.redirectUrl,
-    state,
+  const begin = (maxSeconds?: number) =>
+    client.startAuth({
+      aspsp: { name: aspsp.name, country: aspsp.country },
+      validUntil: consentUntil(Date.now(), maxSeconds),
+      redirectUrl: secret.redirectUrl,
+      state,
+    })
+  // Si el banco admite menos días de los que anuncia, lo dice en el error: se vuelve a pedir con su máximo.
+  const url = await begin(aspsp.maximum_consent_validity).catch((e: unknown) => {
+    const limit = consentLimit(errorMessage(e))
+    if (!limit) throw e
+    return begin(limit)
   })
-  const port = localPort(secret.redirectUrl)
+  handle.onUrl?.(url)
   let back: string | null
-  if (MOCK) {
+  // 'window': banco simulado pero con la ventana real de la app (para probarla en la app nativa).
+  if (MOCK && MOCK_MODE !== 'window') {
     const { mockCallback } = await import('./mock')
     back = await mockCallback(state)
+  } else if (bankSupported) {
+    const inApp = bankAuthWindow(url, secret.redirectUrl).then((r) => r ?? (handle.usingBrowser?.() ? new Promise<string>(() => {}) : null))
+    back = await Promise.race([inApp, pasted])
   } else {
     await openExternal(url)
-    const auto = port && secret.redirectUrl.startsWith('http://') ? waitBankCallback(port).catch(() => null) : new Promise<null>(() => {})
-    back = await Promise.race([auto, pasted])
-    void cancelBankCallback()
+    back = await pasted
   }
-  if (!back) throw new Error('No ha llegado la vuelta del banco. Pega la dirección a la que te llevó el navegador.')
+  if (!back) throw new Error('Has cerrado la ventana del banco antes de terminar. Vuelve a intentarlo.')
   const p = parseCallback(back)
   if (p.error) throw new Error(`El banco no dio permiso: ${p.error}`)
   if (!p.code) throw new Error('La dirección no trae el código de autorización (?code=…).')

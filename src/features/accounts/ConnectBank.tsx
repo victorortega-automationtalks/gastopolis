@@ -1,11 +1,14 @@
 import clsx from 'clsx'
-import { Landmark, Loader2, Search } from 'lucide-react'
+import { ExternalLink, Landmark, Loader2, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Aspsp, EbSession } from '../../bank/enablebanking'
 import { authorize, listBanks, offeredAccounts, saveConnection, syncAccount, type OfferedAccount, type SyncOutcome } from '../../bank/run'
 import { queries } from '../../data/queries'
+import { errorMessage } from '../../lib/errors'
+import { openExternal } from '../../platform'
 import { useUI } from '../../store/ui'
 import { Button, Field, Modal } from '../../ui/components/primitives'
+import { PanelGuide } from './PanelGuide'
 
 const COUNTRIES = [
   { code: 'ES', label: 'España' },
@@ -36,6 +39,9 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
   const [pastedText, setPastedText] = useState('')
   const [outcomes, setOutcomes] = useState<SyncOutcome[] | null>(null)
   const pasteResolver = useRef<((v: string) => void) | null>(null)
+  const authUrl = useRef<string | null>(null)
+  const browser = useRef(false)
+  const [usingBrowser, setUsingBrowser] = useState(false)
 
   useEffect(() => {
     if (!open || renew) return
@@ -52,7 +58,9 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
     setError(null)
     const pasted = new Promise<string>((resolve) => (pasteResolver.current = resolve))
     try {
-      const s = await authorize(aspsp, pasted)
+      browser.current = false
+      setUsingBrowser(false)
+      const s = await authorize(aspsp, pasted, { onUrl: (u) => (authUrl.current = u), usingBrowser: () => browser.current })
       setSession(s)
       // De la base de datos, no del hook: al renovar esto corre nada más abrir, antes de que el hook tenga las cuentas.
       const accounts = await queries.accountsInOrder()
@@ -61,10 +69,14 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
         label: a.existingId ? (accounts.find((x) => x.id === a.existingId)?.name ?? a.name) : a.name,
         on: true,
       }))
+      if (!list.length)
+        throw new Error(
+          `${s.aspsp.name} no ha devuelto ninguna cuenta. Con tu aplicación de Enable Banking en modo restringido solo se leen las cuentas que enlazaste en su panel («Activate by linking accounts»): enlaza allí también esta y vuelve a conectar.`,
+        )
       setOffered(list)
       setPhase('accounts')
     } catch (e) {
-      setError((e as Error).message)
+      setError(errorMessage(e))
       setPhase(renew ? 'auth' : 'pick')
     }
   }
@@ -115,6 +127,7 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
 
       {phase === 'pick' && (
         <div className="space-y-3">
+          <PanelGuide />
           <div className="flex flex-wrap gap-2">
             <select className="field w-auto" value={country} onChange={(e) => setCountry(e.target.value)} aria-label="País del banco">
               {COUNTRIES.map((c) => (
@@ -153,19 +166,33 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
       {phase === 'auth' && (
         <div className="space-y-4 text-sm text-ink-muted">
           <p className="flex items-center gap-2 text-ink">
-            <Loader2 size={16} className="animate-spin text-accent-2" /> Entra en {bank?.name ?? 'tu banco'} en el navegador y da el permiso de lectura.
+            <Loader2 size={16} className="animate-spin text-accent-2" /> Entra en {bank?.name ?? 'tu banco'} en la ventana que se ha abierto y da el permiso de
+            lectura.
           </p>
-          <p>Cuando termines, el navegador te devolverá aquí solo. Puedes cerrar esa pestaña.</p>
-          <Field
-            label="¿No vuelve solo?"
-            hint="Copia la dirección completa de la barra del navegador (empieza por la dirección de vuelta y lleva «?code=…») y pégala aquí."
-          >
+          <p>Al terminar, la ventana se cierra sola y sigues aquí.</p>
+          {!usingBrowser ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-3">
+              <p className="min-w-48 flex-1">¿No carga, se queda esperando o dice que bloquea una ventana? Algunos bancos solo funcionan en tu navegador.</p>
+              <Button
+                onClick={() => {
+                  browser.current = true
+                  setUsingBrowser(true)
+                  if (authUrl.current) void openExternal(authUrl.current)
+                }}
+              >
+                <ExternalLink size={15} /> Ábrelo en el navegador
+              </Button>
+            </div>
+          ) : (
+            <p>Al terminar en el navegador verás una página que no carga: es normal. Copia la dirección completa de la barra y pégala aquí abajo.</p>
+          )}
+          <Field label="Dirección de vuelta" hint="La de la barra del navegador al terminar: empieza por tu dirección de vuelta y lleva «?code=…».">
             <div className="flex gap-2">
               <input
                 className="field num"
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
-                placeholder="https://localhost:47823/callback?code=…"
+                placeholder="https://gastopolis.invalid/callback?code=…"
               />
               <Button disabled={!/code=/.test(pastedText)} onClick={() => pasteResolver.current?.(pastedText)}>
                 Usar

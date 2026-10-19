@@ -1,5 +1,6 @@
 import { normalizeKey } from '../lib/text'
 import { signFor } from '../model/aggregate'
+import { classify, type AutoContext } from '../model/autocat'
 import type { CompiledRules } from '../model/rules'
 import type { Account, BankLink, Category, ISODate, Kind, Movement } from '../model/types'
 import type { EbSession, EbTransaction } from './enablebanking'
@@ -36,6 +37,16 @@ export function isDue(link: Pick<BankLink, 'validUntil' | 'lastSyncAt'>, now: nu
   return !link.lastSyncAt || now - link.lastSyncAt >= every
 }
 
+/** Horas entre dos sincronizaciones forzadas a mano: cada lectura gasta del cupo diario del banco. */
+export const MANUAL_EVERY_HOURS = 24
+
+/** ¿Se puede forzar ya la sincronización de esta cuenta? Si no, desde cuándo. */
+export function manualSync(link: Pick<BankLink, 'validUntil' | 'manualSyncAt'>, now: number): { ok: boolean; nextAt?: number } {
+  if (Date.parse(link.validUntil) <= now) return { ok: false }
+  const nextAt = (link.manualSyncAt ?? 0) + MANUAL_EVERY_HOURS * 3_600_000
+  return nextAt <= now ? { ok: true } : { ok: false, nextAt }
+}
+
 export type ConsentState = 'ok' | 'expiring' | 'expired'
 
 /** Estado del permiso del banco: avisa una semana antes de que caduque. */
@@ -44,10 +55,20 @@ export function consentState(link: Pick<BankLink, 'validUntil'>, now: number, wa
   return { state: left <= 0 ? 'expired' : left <= warnDays ? 'expiring' : 'ok', daysLeft: Math.max(0, Math.ceil(left)) }
 }
 
-/** Hasta cuándo pedir el permiso: lo máximo que admite el banco, con 180 días de tope y 90 si no lo dice. */
+/**
+ * Hasta cuándo pedir el permiso: lo máximo que admite el banco (180 días de tope, 90 si no lo dice) menos un día. Pedir
+ * justo el máximo falla («ASPSP does not support consent validity more than 15552000 seconds») con que el reloj del
+ * equipo vaya un poco adelantado.
+ */
 export function consentUntil(now: number, maxSeconds?: number): string {
   const days = Math.min(180, maxSeconds ? Math.floor(maxSeconds / 86_400) : 90)
-  return new Date(now + Math.max(1, days) * DAY).toISOString()
+  return new Date(now + Math.max(1, days - 1) * DAY).toISOString()
+}
+
+/** Si el banco rechaza la duración del permiso, el máximo que dice admitir (en segundos). */
+export function consentLimit(message: string): number | undefined {
+  const m = /consent validity more than (\d+) seconds/i.exec(message)
+  return m ? Number(m[1]) : undefined
 }
 
 /** «ES12 3456 7890 1234 5678 9012» → «ES12 •••• 9012». */
@@ -137,9 +158,14 @@ export interface Categorizer {
   /** Movimientos ya guardados, para repetir la categoría que tuvo el mismo concepto. */
   history: Movement[]
   fallback: { expense: string; income: string }
+  /** Clasificación automática (catálogo de comercios y pistas de tus datos) y el id de cada categoría propuesta. */
+  auto?: { ctx: AutoContext; ids: Map<string, string> }
 }
 
-/** Categoría para un movimiento nuevo: reglas, luego la última que tuvo ese concepto con el mismo sentido, luego «sin clasificar». */
+/**
+ * Categoría para un movimiento nuevo: tus reglas; luego la que tuvo ese concepto (con el mismo sentido) si la elegiste
+ * tú o el catálogo, no si se quedó «sin clasificar»; luego la clasificación automática; y si no, «sin clasificar».
+ */
 export function categorize(d: Draft, c: Categorizer): Category {
   const byId = new Map(c.categories.map((x) => [x.id, x]))
   const sign: Kind = d.amount < 0 ? 'expense' : 'income'
@@ -147,7 +173,8 @@ export function categorize(d: Draft, c: Categorizer): Category {
   const byRule = byId.get(c.rules.categoryFor(d.concept, sign, d.amount) ?? '')
   if (fits(byRule)) return byRule!
   const key = normalizeKey(d.concept)
-  const sameSign = (m: Movement) => Math.sign(m.amount) === Math.sign(d.amount)
+  const reserve = new Set([c.fallback.expense, c.fallback.income])
+  const sameSign = (m: Movement) => Math.sign(m.amount) === Math.sign(d.amount) && !reserve.has(m.categoryId)
   // Igual, o el mismo comercio escrito de otra forma («Mercadona S.A.» y «Mercadona»): uno empieza por el otro, o
   // comparten la primera palabra (de 4 letras o más).
   const first = key.split(' ')[0]
@@ -157,6 +184,9 @@ export function categorize(d: Draft, c: Categorizer): Category {
     (first.length >= 4 ? c.history.find((m) => sameSign(m) && m.conceptKey.split(' ')[0] === first) : undefined)
   const byHistory = byId.get(prev?.categoryId ?? '')
   if (fits(byHistory)) return byHistory!
+  const guess = c.auto && classify(d, c.auto.ctx)
+  const byAuto = guess && byId.get(c.auto!.ids.get(guess.key) ?? '')
+  if (fits(byAuto)) return byAuto!
   return byId.get(c.fallback[sign])!
 }
 

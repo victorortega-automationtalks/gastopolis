@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { autoContext } from '../model/autocat'
 import { compileRules } from '../model/rules'
 import type { Category, Movement, Rule } from '../model/types'
 import { ebClient, EbError, parseCallback, type EbRequest, type EbTransaction } from './enablebanking'
@@ -6,10 +7,12 @@ import {
   cleanConcept,
   consentState,
   offeredAccounts,
+  consentLimit,
   consentUntil,
   fetchRange,
   internalTransfers,
   isDue,
+  manualSync,
   maskIban,
   reconcile,
   toDrafts,
@@ -53,14 +56,28 @@ describe('sincronización: cuándo y qué pedir', () => {
     expect(isDue({ validUntil: new Date(now - 1000).toISOString() }, now, 6)).toBe(false)
   })
 
+  it('sincronizar a mano: una vez al día por cuenta', () => {
+    const now = Date.parse('2026-10-19T12:00:00Z')
+    const valid = new Date(now + 30 * DAY).toISOString()
+    expect(manualSync({ validUntil: valid }, now)).toEqual({ ok: true })
+    expect(manualSync({ validUntil: valid, manualSyncAt: now - 3_600_000 }, now)).toEqual({ ok: false, nextAt: now + 23 * 3_600_000 })
+    expect(manualSync({ validUntil: valid, manualSyncAt: now - DAY }, now).ok).toBe(true)
+    expect(manualSync({ validUntil: new Date(now - 1000).toISOString() }, now).ok).toBe(false)
+  })
+
   it('avisa una semana antes de que caduque el permiso', () => {
     const now = Date.parse('2026-10-19T12:00:00Z')
     expect(consentState({ validUntil: new Date(now + 30 * DAY).toISOString() }, now).state).toBe('ok')
     expect(consentState({ validUntil: new Date(now + 5 * DAY).toISOString() }, now)).toEqual({ state: 'expiring', daysLeft: 5 })
     expect(consentState({ validUntil: new Date(now - DAY).toISOString() }, now).state).toBe('expired')
     // Lo máximo que deje el banco, con 180 días de tope.
-    expect(Date.parse(consentUntil(now, 365 * 86_400)) - now).toBe(180 * DAY)
-    expect(Date.parse(consentUntil(now)) - now).toBe(90 * DAY)
+    // Un día menos del máximo: pedir justo 180 días lo rechaza el banco si el reloj va adelantado.
+    expect(Date.parse(consentUntil(now, 365 * 86_400)) - now).toBe(179 * DAY)
+    expect(Date.parse(consentUntil(now, 15_552_000)) - now).toBe(179 * DAY)
+    expect(Date.parse(consentUntil(now)) - now).toBe(89 * DAY)
+    expect(Date.parse(consentUntil(now, 3600)) - now).toBe(DAY)
+    expect(consentLimit('[WRONG_REQUEST_PARAMETERS] ASPSP does not support consent validity more than 7776000 seconds in the future')).toBe(7_776_000)
+    expect(consentLimit('otra cosa')).toBeUndefined()
   })
 })
 
@@ -142,6 +159,21 @@ describe('sincronización: del banco a movimientos', () => {
       ['otros-ing', 20],
       ['super', -31],
     ])
+  })
+
+  it('lo que tu historial deja «sin clasificar» lo resuelve la clasificación automática; lo que elegiste tú, no', () => {
+    const history = [
+      mv({ id: 'h', date: '2026-09-01', amount: -30, concept: 'Repsol', conceptKey: 'repsol', categoryId: 'sin' }),
+      mv({ id: 'h2', date: '2026-09-01', amount: -12, concept: 'Shell', conceptKey: 'shell', categoryId: 'super' }),
+    ]
+    const drafts = toDrafts([
+      tx({ amount: '40', entry_reference: 'A', remittance_information: ['REPSOL'] }),
+      tx({ amount: '15', entry_reference: 'B', remittance_information: ['SHELL'] }),
+      tx({ amount: '9', entry_reference: 'C', remittance_information: ['CONCEPTO RARO'] }),
+    ])
+    const auto = { ctx: autoContext([]), ids: new Map([['fuel', 'gasolina']]) }
+    const plan = reconcile(drafts, { id: 'bbva' }, history, [], { ...categorizer(history), categories: [...categories, cat('gasolina', 'expense')], auto }, 0)
+    expect(plan.added.map((m) => m.categoryId)).toEqual(['gasolina', 'super', 'sin'])
   })
 
   it('detecta traspasos entre tus cuentas para que no cuenten como gasto e ingreso', () => {
@@ -237,12 +269,26 @@ describe('cliente de Enable Banking', () => {
   it('traduce los errores: credencial mala, permiso caducado, límite del banco', async () => {
     const fail = (status: number, body: object) => ebClient(async () => ({ status, body: JSON.stringify(body) })).aspsps('ES')
     await expect(fail(401, { error: 'UNAUTHORIZED', message: 'Invalid JWT signature' })).rejects.toThrow(/credencial/)
+    await expect(fail(403, { message: 'Application is not active' })).rejects.toThrow(/Activate by linking accounts/)
     // Respuesta real de la API con un id de aplicación que no existe.
     await expect(fail(403, { code: 403, message: 'Application does not exist' })).rejects.toThrow(/credencial/)
     const expired = await fail(401, { error: 'EXPIRED_SESSION', message: 'Session expired' }).catch((e: EbError) => e)
     expect(expired).toBeInstanceOf(EbError)
     expect((expired as EbError).expired).toBe(true)
     await expect(fail(429, { message: 'Too many requests' })).rejects.toThrow(/4 al día/)
+  })
+
+  it('un 403 que no es de sesión no se disfraza de «permiso caducado» y deja ver el error original', async () => {
+    const fail = (status: number, body: object) => ebClient(async () => ({ status, body: JSON.stringify(body) })).aspsps('ES')
+    const odd = (await fail(403, { code: 403, error: 'UNAUTHORIZED_ACCESS', message: 'Unauthorized access' }).catch((e: EbError) => e)) as EbError
+    expect(odd.expired).toBe(false)
+    expect(odd.message).not.toMatch(/caducado/)
+    expect(odd.message).toMatch(/\[UNAUTHORIZED_ACCESS\] Unauthorized access/)
+    await expect(fail(400, { error: 'REDIRECT_URI_NOT_ALLOWED', message: 'Redirect URI not allowed' })).rejects.toThrow(/Redirect URLs/)
+    await expect(fail(403, { error: 'NO_ACCOUNTS_ADDED', message: 'No allowed accounts added to the application' })).rejects.toThrow(/linking accounts/)
+    await expect(fail(422, { error: 'WRONG_REQUEST_PARAMETERS', message: 'x', detail: { field: 'valid_until' } })).rejects.toThrow(/valid_until/)
+    const revoked = (await fail(403, { error: 'REVOKED_SESSION', message: 'Session is revoked' }).catch((e: EbError) => e)) as EbError
+    expect(revoked.expired).toBe(true)
   })
 
   it('lee el código de vuelta de la dirección o de lo que se pega', () => {

@@ -7,6 +7,7 @@ import { countMatches, isValidRegex, MATCH_LABEL, previewRules } from '../../mod
 import type { Rule } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, CategoryChip } from '../../ui/components/primitives'
+import { RuleSuggestions } from './RuleSuggestions'
 import { categoryLabel } from './tree'
 
 const MATCH_TYPES: Rule['matchType'][] = ['contains', 'equals', 'regex']
@@ -90,6 +91,14 @@ export function RulesPanel() {
               : 'Sin tildes ni mayúsculas: «nomina» encuentra «Nómina».'}
         </p>
       </Card>
+
+      <RuleSuggestions
+        onPick={(p) => {
+          setMatchType('contains')
+          setPattern(p)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+      />
 
       {rules.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">

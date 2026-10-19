@@ -1,19 +1,19 @@
 import clsx from 'clsx'
-import { Check, Copy, ExternalLink, FileKey2, ShieldCheck } from 'lucide-react'
+import { Check, Copy, FileKey2, ShieldCheck } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { DEFAULT_REDIRECT, listBanks } from '../../bank/run'
 import { useBankSecret } from '../../data/hooks'
 import { saveBankSecret } from '../../data/repo'
-import { openExternal } from '../../platform'
+import { errorMessage } from '../../lib/errors'
 import { useUI } from '../../store/ui'
 import { Button, Field, Modal } from '../../ui/components/primitives'
+import { CONTROL_PANEL, LinkButton } from './PanelGuide'
 
 /**
  * Tutorial para crear la cuenta y la aplicación de Enable Banking, y cargar su credencial en Gastópolis. Enable
  * Banking es quien habla con los bancos por PSD2; en modo «restringido» es gratis para leer tus propias cuentas.
  */
 
-const CONTROL_PANEL = 'https://enablebanking.com/cp/applications'
 const SIGN_IN = 'https://enablebanking.com/sign-in/'
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 
@@ -51,15 +51,6 @@ function CopyLine({ value }: { value: string }) {
   )
 }
 
-function LinkButton({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <Button size="sm" onClick={() => void openExternal(href)}>
-      <ExternalLink size={14} />
-      {children}
-    </Button>
-  )
-}
-
 export function BankSetup({ open, onClose, onReady }: { open: boolean; onClose: () => void; onReady?: () => void }) {
   const current = useBankSecret()
   const toast = useUI((s) => s.toast)
@@ -92,7 +83,7 @@ export function BankSetup({ open, onClose, onReady }: { open: boolean; onClose: 
       toast('Enable Banking configurado')
       onReady?.()
     } catch (e) {
-      setResult({ ok: false, text: (e as Error).message })
+      setResult({ ok: false, text: errorMessage(e) })
     } finally {
       setTesting(false)
     }
@@ -167,14 +158,14 @@ export function BankSetup({ open, onClose, onReady }: { open: boolean; onClose: 
       )}
 
       {step === 1 && (
-        <Step n={1} title="Crea tu cuenta en Enable Banking">
+        <Step n={2} title="Crea tu cuenta en Enable Banking">
           <p>Entra con tu correo: te llegará un enlace para confirmar. Si ya tienes cuenta, pasa al siguiente paso.</p>
           <LinkButton href={SIGN_IN}>Abrir enablebanking.com</LinkButton>
         </Step>
       )}
 
       {step === 2 && (
-        <Step n={2} title="Registra tu aplicación (una vez)">
+        <Step n={3} title="Registra tu aplicación (una vez)">
           <p>
             En el panel de control, ve a <b className="text-ink">API applications</b> y rellena «Add a new application»:
           </p>
@@ -194,11 +185,14 @@ export function BankSetup({ open, onClose, onReady }: { open: boolean; onClose: 
                 <CopyLine value={redirect} />
               </div>
               <span className="mt-1 block text-xs">
-                Si el panel no admite direcciones http, registra la misma con https; entonces, al volver del banco, el navegador dirá que no puede abrir la
-                página: copia la dirección de la barra y pégala en Gastópolis (te lo pediremos).
+                Tiene que ser https y con dominio (el panel no admite localhost). No hace falta que exista: Gastópolis abre tu banco en su propia ventana y
+                recoge la vuelta antes de que se cargue, así que nada sale de tu equipo. Si el panel no la aceptara, vale cualquier dirección https tuya (la de
+                tu web, por ejemplo); ponla igual en el paso 5.
               </span>
             </li>
-            <li>Si el formulario pide más datos (correo, descripción, direcciones de privacidad o de condiciones), rellénalos con los tuyos.</li>
+            <li>
+              Los demás campos (descripción, correo, direcciones de privacidad y de condiciones) puedes rellenarlos con tus datos o con el nombre de la app.
+            </li>
           </ul>
           <p>
             Pulsa <b className="text-ink">Register</b>. El navegador descargará un archivo <code className="text-ink">xxxxxxxx-xxxx-….pem</code>: es tu clave
@@ -209,7 +203,7 @@ export function BankSetup({ open, onClose, onReady }: { open: boolean; onClose: 
       )}
 
       {step === 3 && (
-        <Step n={3} title="Activa la aplicación enlazando tus bancos">
+        <Step n={4} title="Activa la aplicación enlazando tus bancos">
           <p>
             En la ficha de la aplicación, pulsa <b className="text-ink">Activate by linking accounts</b> y entra en cada banco que quieras ver en Gastópolis
             (ABANCA, Revolut, Santander, BBVA, CaixaBank…). Aceptas las condiciones de Enable Banking y das permiso en la web de tu banco.
@@ -218,29 +212,28 @@ export function BankSetup({ open, onClose, onReady }: { open: boolean; onClose: 
             Al terminar, la aplicación aparece como <b className="text-ink">Restricted</b> y <b className="text-ink">Active</b>: puede leer solo las cuentas que
             has enlazado, que es justo lo que queremos. Si más adelante abres otra cuenta, vuelve aquí y enlázala también.
           </p>
+          <p>
+            Ojo: enlazar en el panel solo <b className="text-ink">activa</b> la aplicación. Después, en Gastópolis, pulsa{' '}
+            <b className="text-ink">Conectar un banco</b> y vuelve a entrar en ese mismo banco: así la app recibe su propio permiso de lectura.
+          </p>
           <p className="text-xs">Revolut suele estar como banco de Lituania (Revolut Bank UAB). B100 es de ABANCA: si no aparece aparte, entra por ABANCA.</p>
           <LinkButton href={CONTROL_PANEL}>Abrir el panel de control</LinkButton>
         </Step>
       )}
 
       {step === 4 && (
-        <Step n={4} title="Carga la credencial en Gastópolis">
+        <Step n={5} title="Carga la credencial en Gastópolis">
           <Field label="Archivo de la clave (.pem)" hint="El que descargó el navegador al registrar la aplicación. El id de la aplicación se lee de su nombre.">
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-line-strong bg-surface px-3 py-3 text-sm text-ink hover:border-accent-2">
               <FileKey2 size={16} className="text-accent-2" />
               {pem ? 'Clave cargada · elegir otra' : 'Elegir el archivo .pem'}
-              <input
-                type="file"
-                accept=".pem,application/x-pem-file,text/plain"
-                className="hidden"
-                onChange={(e) => e.target.files?.[0] && void loadPem(e.target.files[0])}
-              />
+              <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && void loadPem(e.target.files[0])} />
             </label>
           </Field>
           <Field label="Id de la aplicación" hint="Aparece en el panel de control (Application ID) y es el nombre del archivo .pem.">
             <input className="field num" value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" />
           </Field>
-          <Field label="Dirección de vuelta (Redirect URL)" hint="La misma que registraste en el panel.">
+          <Field label="Dirección de vuelta (Redirect URL)" hint="Exactamente la misma que registraste en el panel.">
             <input className="field num" value={redirect} onChange={(e) => setRedirect(e.target.value)} />
           </Field>
           {result && <p className={clsx('rounded-lg px-3 py-2 text-sm', result.ok ? 'bg-income/10 text-income' : 'bg-danger/10 text-danger')}>{result.text}</p>}

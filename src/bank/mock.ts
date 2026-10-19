@@ -59,7 +59,12 @@ export const mockTransport: EbTransport = async (req: EbRequest) => {
   await new Promise((r) => setTimeout(r, 250))
   const ok = (body: unknown) => ({ status: 200, body: JSON.stringify(body) })
   if (req.path === '/aspsps') return ok({ aspsps: BANKS.filter((b) => !req.query?.country || b.country === req.query.country) })
-  if (req.path === '/auth') return ok({ url: 'https://banco-simulado.invalid/login', authorization_id: 'auth-1' })
+  if (req.path === '/auth') {
+    // Una página https de verdad que redirige a la dirección de vuelta, como haría el banco al terminar.
+    const b = req.body as { redirect_url: string; state: string }
+    const back = `${b.redirect_url}?code=mock-code&state=${b.state}`
+    return ok({ url: `https://httpbin.org/redirect-to?url=${encodeURIComponent(back)}`, authorization_id: 'auth-1' })
+  }
   if (req.path === '/sessions' && req.method === 'POST') {
     const until = new Date(Date.now() + 180 * 86_400_000).toISOString()
     return ok({

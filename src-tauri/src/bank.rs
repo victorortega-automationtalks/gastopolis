@@ -3,7 +3,7 @@
 //! (la clave de tu aplicación de Enable Banking), que firma cada token aquí, en tu equipo.
 //!
 //! - `bank_request`: petición a la API con un token RS256 recién firmado. La web no puede elegir el servidor.
-//! - `bank_wait_callback`: espera en localhost a que el banco devuelva al usuario con el código de autorización.
+//! - `bank_auth_window`: ventana de la app para entrar en el banco; recoge la vuelta con el código sin cargarla.
 //! - `open_external`: abre la página del banco (o la de Enable Banking) en el navegador del sistema.
 
 use base64::Engine;
@@ -15,10 +15,7 @@ use rsa::pkcs8::DecodePrivateKey;
 use rsa::signature::{SignatureEncoding, Signer};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpListener;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const API: &str = "https://api.enablebanking.com";
 
@@ -42,6 +39,10 @@ pub struct BankResponse {
 
 /// Token de la API: cabecera con el id de la aplicación, válido una hora, firmado con RS256.
 pub fn sign_jwt(app_id: &str, key_pem: &str, now: u64) -> Result<String, String> {
+    // Tolerante con cómo se haya guardado el archivo: saltos de línea de Windows, BOM o espacios alrededor.
+    let key_pem = key_pem.trim_start_matches('\u{feff}').replace("\r\n", "\n").replace('\r', "\n");
+    let key_pem = key_pem.trim();
+    let app_id = app_id.trim();
     let key = RsaPrivateKey::from_pkcs8_pem(key_pem)
         .or_else(|_| RsaPrivateKey::from_pkcs1_pem(key_pem))
         .map_err(|_| "El archivo .pem no es una clave privada RSA válida".to_string())?;
@@ -64,7 +65,14 @@ fn request(call: BankCall) -> Result<BankResponse, String> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
     let token = format!("Bearer {}", sign_jwt(&call.app_id, &call.key_pem, now)?);
     let agent: ureq::Agent = ureq::Agent::config_builder()
-        .tls_config(ureq::tls::TlsConfig::builder().provider(ureq::tls::TlsProvider::NativeTls).build())
+        .tls_config(
+            // Los certificados del sistema (en Windows, los de Schannel). Con la lista propia de ureq, Schannel rechaza la
+            // conexión: «unable to find any user-specified roots in the final cert chain».
+            ureq::tls::TlsConfig::builder()
+                .provider(ureq::tls::TlsProvider::NativeTls)
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
         .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(60)))
         .build()
@@ -98,63 +106,98 @@ pub async fn bank_request(call: BankCall) -> Result<BankResponse, String> {
     tauri::async_runtime::spawn_blocking(move || request(call)).await.map_err(|e| e.to_string())?
 }
 
-static CANCEL: AtomicBool = AtomicBool::new(false);
-
-/// De «GET /callback?code=1&state=2 HTTP/1.1» saca «/callback?code=1&state=2» si es la vuelta del banco.
-pub fn callback_target(request_line: &str) -> Option<String> {
-    let mut parts = request_line.split_whitespace();
-    if parts.next()? != "GET" {
-        return None;
-    }
-    let target = parts.next()?;
-    let path = target.split('?').next().unwrap_or("");
-    (path == "/callback" || path == "/callback/").then(|| target.to_string())
+/// ¿Es esta navegación la vuelta del banco? Mismo esquema, servidor y ruta que la dirección de vuelta registrada.
+pub fn is_redirect(url: &str, redirect: &str) -> bool {
+    let (Ok(u), Ok(r)) = (tauri::Url::parse(url), tauri::Url::parse(redirect)) else {
+        return false;
+    };
+    u.scheme() == r.scheme()
+        && u.host_str() == r.host_str()
+        && u.port_or_known_default() == r.port_or_known_default()
+        && u.path().trim_end_matches('/') == r.path().trim_end_matches('/')
 }
 
-const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Gastópolis</title>\
-<body style=\"font-family:system-ui;background:#06070c;color:#eef0ff;display:grid;place-items:center;height:100vh;margin:0\">\
-<div style=\"text-align:center\"><h1>Listo</h1><p>Ya puedes cerrar esta pestaña y volver a Gastópolis.</p></div>";
-
-fn wait_callback(port: u16, timeout: Duration) -> Result<Option<String>, String> {
-    CANCEL.store(false, Ordering::SeqCst);
-    let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("No se pudo escuchar en el puerto {port}: {e}"))?;
-    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
-    let start = Instant::now();
-    while start.elapsed() < timeout && !CANCEL.load(Ordering::SeqCst) {
-        match listener.accept() {
-            Ok((mut stream, _)) => {
-                let _ = stream.set_nonblocking(false);
-                let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-                let mut line = String::new();
-                let _ = BufReader::new(&stream).read_line(&mut line);
-                if let Some(target) = callback_target(&line) {
-                    let _ = write!(
-                        stream,
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{DONE_PAGE}",
-                        DONE_PAGE.len()
-                    );
-                    return Ok(Some(target));
-                }
-                let _ = write!(stream, "HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(150)),
-            Err(e) => return Err(e.to_string()),
+/// Entrar en el banco dentro de una ventana de la app. Cuando el banco devuelve al usuario a la dirección de vuelta,
+/// la ventana lo detecta antes de cargarla (no sale ninguna petición hacia esa dirección), se cierra y devuelve la
+/// dirección con el código. Así vale cualquier dirección https registrada en Enable Banking, aunque no exista.
+/// La ventana no tiene permisos de la app (las capacidades son solo de «main») y solo navega por https.
+/// Devuelve None si el usuario la cierra o pasa media hora.
+#[tauri::command]
+pub async fn bank_auth_window(app: tauri::AppHandle, url: String, redirect: String) -> Result<Option<String>, String> {
+    use tauri::Manager;
+    let start = tauri::Url::parse(&url).map_err(|e| e.to_string())?;
+    if start.scheme() != "https" {
+        return Err("La página del banco tiene que ser https".into());
+    }
+    for (label, old) in app.webview_windows() {
+        if label.starts_with("bank-auth") {
+            let _ = old.destroy();
         }
     }
-    Ok(None)
-}
-
-/// Espera la vuelta del banco en http://localhost:{port}/callback. None si se cancela o pasa el tiempo.
-#[tauri::command]
-pub async fn bank_wait_callback(port: u16, timeout_secs: u64) -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || wait_callback(port, Duration::from_secs(timeout_secs.min(1800))))
+    let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
+    let on_nav = tx.clone();
+    let main_redirect = redirect.clone();
+    let popup_app = app.clone();
+    let popup_tx = tx.clone();
+    let popups = std::sync::atomic::AtomicUsize::new(0);
+    let window = tauri::WebviewWindowBuilder::new(&app, "bank-auth", tauri::WebviewUrl::External(start))
+        .title("Gastópolis · Entra en tu banco")
+        .inner_size(960.0, 780.0)
+        .center()
+        .on_navigation(move |u| {
+            if is_redirect(u.as_str(), &main_redirect) {
+                let _ = on_nav.send(Some(u.to_string()));
+                return false;
+            }
+            u.scheme() == "https"
+        })
+        // Algunos bancos (Revolut) autorizan en una ventana emergente y la página espera a que termine. Se abre como
+        // ventana hija con las mismas reglas: solo https y la vuelta del banco se recoge también desde ella.
+        .on_new_window(move |url, features| {
+            // Muchas webs abren la emergente en blanco al pulsar y le ponen la dirección después (así no la bloquean).
+            if !(url.scheme() == "https" || url.scheme() == "about") {
+                return tauri::webview::NewWindowResponse::Deny;
+            }
+            let n = popups.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let tx = popup_tx.clone();
+            let redirect = redirect.clone();
+            let built = tauri::WebviewWindowBuilder::new(
+                &popup_app,
+                format!("bank-auth-popup-{n}"),
+                tauri::WebviewUrl::External("about:blank".parse().unwrap()),
+            )
+            .window_features(features)
+            .title("Gastópolis · Autoriza en tu banco")
+            .on_navigation(move |u| {
+                if is_redirect(u.as_str(), &redirect) {
+                    let _ = tx.send(Some(u.to_string()));
+                    return false;
+                }
+                u.scheme() == "https" || u.scheme() == "about"
+            })
+            .build();
+            match built {
+                Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+                // Si no se puede crear la nuestra, mejor la emergente normal del sistema que bloquear la entrada.
+                Err(_) => tauri::webview::NewWindowResponse::Allow,
+            }
+        })
+        .build()
+        .map_err(|e| e.to_string())?;
+    window.on_window_event(move |e| {
+        if let tauri::WindowEvent::Destroyed = e {
+            let _ = tx.send(None);
+        }
+    });
+    let got = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(1800)).ok().flatten())
         .await
-        .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-pub fn bank_cancel_callback() {
-    CANCEL.store(true, Ordering::SeqCst);
+        .map_err(|e| e.to_string())?;
+    for (label, w) in app.webview_windows() {
+        if label.starts_with("bank-auth") {
+            let _ = w.destroy();
+        }
+    }
+    Ok(got)
 }
 
 /// Abre una dirección https en el navegador del sistema (la página del banco, el panel de Enable Banking…).
@@ -191,6 +234,9 @@ mod tests {
         let verifier = VerifyingKey::<Sha256>::new(key.to_public_key());
         assert!(verifier.verify(format!("{}.{}", parts[0], parts[1]).as_bytes(), &sig).is_ok());
         assert!(sign_jwt("app", "no es una clave", 0).is_err());
+        // El mismo archivo con saltos de línea de Windows, BOM y espacios también vale.
+        let windows = format!("\u{feff}  {}  ", pem.replace('\n', "\r\n"));
+        assert!(sign_jwt("app-123", &windows, 1_700_000_000).is_ok());
     }
 
     #[test]
@@ -203,26 +249,13 @@ mod tests {
     }
 
     #[test]
-    fn reconoce_la_vuelta_del_banco() {
-        assert_eq!(
-            callback_target("GET /callback?code=abc&state=1 HTTP/1.1\r\n").as_deref(),
-            Some("/callback?code=abc&state=1")
-        );
-        assert_eq!(callback_target("GET /favicon.ico HTTP/1.1"), None);
-        assert_eq!(callback_target("POST /callback HTTP/1.1"), None);
-    }
-
-    #[test]
-    fn espera_la_vuelta_en_localhost() {
-        let port = 47_899;
-        let handle = std::thread::spawn(move || wait_callback(port, Duration::from_secs(5)));
-        std::thread::sleep(Duration::from_millis(300));
-        let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
-        write!(s, "GET /callback?code=XYZ&state=s HTTP/1.1\r\nHost: localhost\r\n\r\n").unwrap();
-        let mut reply = String::new();
-        let _ = std::io::Read::read_to_string(&mut s, &mut reply);
-        assert!(reply.starts_with("HTTP/1.1 200"));
-        assert_eq!(handle.join().unwrap().unwrap().as_deref(), Some("/callback?code=XYZ&state=s"));
+    fn detecta_la_direccion_de_vuelta() {
+        let r = "https://gastopolis.invalid/callback";
+        assert!(is_redirect("https://gastopolis.invalid/callback?code=1&state=2", r));
+        assert!(is_redirect("https://gastopolis.invalid/callback/?code=1", r));
+        assert!(!is_redirect("https://gastopolis.invalid/otra?code=1", r));
+        assert!(!is_redirect("https://banco.es/callback?code=1", r));
+        assert!(!is_redirect("http://gastopolis.invalid/callback?code=1", r));
     }
 }
 
