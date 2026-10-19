@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import clsx from 'clsx'
 import { ArrowDown, ArrowUp, Trash2, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
-import { useAccounts, useCategories, useCategoryMap, useFilteredMovements, useSettings } from '../../data/hooks'
+import { useAccounts, useCategoryMap, useFilteredMovements, useSettings } from '../../data/hooks'
 import { deleteMovements, recategorize, restoreMovements } from '../../data/repo'
 import { totals } from '../../model/aggregate'
 import { fmtDate, fmtMonth, savingsPhrase } from '../../model/format'
@@ -12,14 +12,13 @@ import type { Movement } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, CategoryChip, Money, Stat } from '../../ui/components/primitives'
 import { offerRule } from '../categories/offerRule'
-import { categoryLabel } from '../categories/tree'
+import { CategorySelect } from '../categories/CategorySelect'
 import { Welcome } from '../onboarding/Welcome'
 
 type SortKey = 'date' | 'concept' | 'category' | 'amount'
 
 export function MovementsScreen() {
   const { all, filtered } = useFilteredMovements()
-  const categories = useCategories()
   const catMap = useCategoryMap()
   const settings = useSettings()
   const editMovement = useUI((s) => s.editMovement)
@@ -103,14 +102,13 @@ export function MovementsScreen() {
           <span className="text-sm">
             {selected.size} seleccionados · <Money value={selTotal} kind="auto" />
           </span>
-          <select className="field ml-auto h-8 w-56 py-0 text-xs" value="" onChange={(e) => e.target.value && void bulkRecategorize(e.target.value)}>
-            <option value="">Mover a categoría…</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {categoryLabel(c, categories)}
-              </option>
-            ))}
-          </select>
+          <CategorySelect
+            className="ml-auto w-56"
+            value=""
+            onChange={(id) => void bulkRecategorize(id)}
+            placeholder="Mover a categoría…"
+            aria-label="Mover a categoría"
+          />
           <Button size="sm" variant="danger" onClick={bulkDelete}>
             <Trash2 size={14} /> Borrar
           </Button>

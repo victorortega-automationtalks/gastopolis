@@ -11,7 +11,7 @@ import type { Movement } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, Money } from '../../ui/components/primitives'
 import { CategoryIcon } from '../../ui/icons'
-import { categoryLabel } from '../categories/tree'
+import { CategorySelect } from '../categories/CategorySelect'
 
 interface Played {
   before: Movement[]
@@ -54,13 +54,9 @@ export function SortScreen() {
   const visible = deck.filter((c) => !skipped.includes(cardKey(c)))
   const card = visible[0] ?? deck[0]
   const options = useMemo(() => (card ? cardOptions(card, movements, categories, reserve, ctx) : []), [card, movements, categories, reserve, ctx])
-  const others = useMemo(
-    () => (card ? categories.filter((c) => !reserve.includes(c.id) && (c.kind === card.kind || c.kind === 'transfer')) : []),
-    [card, categories, reserve],
-  )
 
   const cardRef = useRef<HTMLDivElement>(null)
-  const [other, setOther] = useState('')
+  const otherRef = useRef<HTMLDivElement>(null)
 
   const choose = useCallback(
     async (opt: { categoryId?: string; auto?: SortOption['auto'] }, target?: HTMLElement | null) => {
@@ -103,7 +99,6 @@ export function SortScreen() {
       } finally {
         setFly(undefined)
         setLeaving(null)
-        setOther('')
         setBusy(false)
       }
     },
@@ -258,23 +253,17 @@ export function SortScreen() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              className="field w-auto min-w-48 flex-1"
-              value={other}
+            <CategorySelect
+              ref={otherRef}
+              className="min-w-48 flex-1"
+              value=""
               disabled={busy}
-              onChange={(e) => {
-                setOther(e.target.value)
-                if (e.target.value) void choose({ categoryId: e.target.value }, e.currentTarget)
-              }}
+              kinds={[card.kind, 'transfer']}
+              exclude={reserve}
+              placeholder="Otra categoría…"
               aria-label="Otra categoría"
-            >
-              <option value="">Otra categoría…</option>
-              {others.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {categoryLabel(c, categories)}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => void choose({ categoryId: id }, otherRef.current)}
+            />
             <Button onClick={skip} disabled={busy}>
               <SkipForward size={15} /> Saltar <kbd className="num hidden text-[10px] text-ink-faint sm:inline">S</kbd>
             </Button>

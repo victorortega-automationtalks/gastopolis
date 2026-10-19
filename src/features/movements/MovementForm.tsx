@@ -1,9 +1,9 @@
 import { shownDate } from '../../model/payday'
 import clsx from 'clsx'
-import { Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccounts, useCategories, useMovements, useRules } from '../../data/hooks'
-import { addMovement, deleteMovements, restoreMovements, updateMovement } from '../../data/repo'
+import { addMovement, createCategory, deleteMovements, restoreMovements, updateMovement } from '../../data/repo'
 import { parseAmount } from '../../import/values'
 import { normalizeKey } from '../../lib/text'
 import { KIND_LABEL } from '../../model/defaults'
@@ -187,7 +187,7 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
           ))}
         </datalist>
       </Field>
-      <Field group label="Categoría" hint={ofKind.length === 0 ? 'No hay categorías de este tipo: créalas en Categorías.' : undefined}>
+      <Field group label="Categoría">
         <div className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
           {ofKind.map((c) => (
             <button
@@ -204,6 +204,7 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
               {categoryLabel(c, categories)}
             </button>
           ))}
+          <NewCategoryChip kind={kind} onCreated={setPickedCategory} />
         </div>
       </Field>
       {kind === 'transfer' && (
@@ -251,4 +252,55 @@ function rememberAccount(id: string) {
   } catch {
     // Sin almacenamiento: no pasa nada.
   }
+}
+
+/** «＋ Nueva»: crea una categoría del tipo del movimiento sin salir del formulario y la deja elegida. */
+function NewCategoryChip({ kind, onCreated }: { kind: Kind; onCreated: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const toast = useUI((s) => s.toast)
+  const create = async () => {
+    const n = name.trim()
+    if (!n) return
+    const id = await createCategory({ name: n, kind })
+    toast(`Categoría «${n}» creada`)
+    setName('')
+    setOpen(false)
+    onCreated(id)
+  }
+  if (!open)
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 rounded-full border border-dashed border-line-strong px-2.5 py-1 text-xs text-ink-muted transition hover:text-ink"
+      >
+        <Plus size={13} /> Nueva
+      </button>
+    )
+  return (
+    <span className="flex items-center gap-1">
+      <input
+        autoFocus
+        className="field h-7 w-44 py-0 text-xs"
+        placeholder={`Nueva categoría de ${KIND_LABEL[kind].toLowerCase()}`}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            void create()
+          }
+          if (e.key === 'Escape') {
+            e.stopPropagation()
+            setOpen(false)
+          }
+        }}
+        aria-label="Nombre de la categoría nueva"
+      />
+      <Button type="button" size="sm" variant="primary" className="h-7" disabled={!name.trim()} onClick={() => void create()}>
+        Crear
+      </Button>
+    </span>
+  )
 }

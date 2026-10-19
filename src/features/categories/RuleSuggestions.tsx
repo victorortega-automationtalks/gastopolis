@@ -5,7 +5,7 @@ import { applyRulesToExisting, createRule, ensureAutoCategory, reserveCategoryId
 import { suggestRules, type RuleSuggestion } from '../../model/ruleSuggest'
 import { useUI } from '../../store/ui'
 import { Button, Card, Money } from '../../ui/components/primitives'
-import { categoryLabel } from './tree'
+import { CategorySelect } from './CategorySelect'
 
 const NEW = 'new'
 
@@ -81,15 +81,15 @@ function SuggestionRow({ s, onPick }: { s: RuleSuggestion; onPick: (pattern: str
         </div>
         <div className="mt-0.5 truncate text-xs text-ink-faint">{s.samples.join(' · ')}</div>
       </div>
-      <select className="field w-full sm:w-56" value={choice} onChange={(e) => setPicked(e.target.value)} aria-label={`Categoría para «${s.pattern}»`}>
-        <option value="">→ Categoría…</option>
-        {s.newCategory && <option value={NEW}>＋ {s.newCategory.name} (nueva)</option>}
-        {options.map((c) => (
-          <option key={c.id} value={c.id}>
-            {categoryLabel(c, categories)}
-          </option>
-        ))}
-      </select>
+      <CategorySelect
+        className="w-full sm:w-56"
+        value={choice}
+        onChange={setPicked}
+        kinds={[s.kind, 'transfer']}
+        placeholder="→ Categoría…"
+        extra={s.newCategory ? [{ value: NEW, label: `＋ ${s.newCategory.name} (nueva)` }] : []}
+        aria-label={`Categoría para «${s.pattern}»`}
+      />
       <Button size="sm" variant="primary" disabled={!choice || busy} onClick={() => void create()}>
         <Plus size={14} /> Crear regla
       </Button>
