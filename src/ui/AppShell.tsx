@@ -1,12 +1,12 @@
 import clsx from 'clsx'
 import { Menu, Plus, Search, Upload, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import { useCategoryMap } from '../data/hooks'
+import { useCategoryMap, useUnclassifiedCount } from '../data/hooks'
 import { KIND_LABEL_PLURAL } from '../model/defaults'
 import { KINDS, type Kind } from '../model/types'
 import { useUI, type Route } from '../store/ui'
 import { Button } from './components/primitives'
-import { CURRENT_PHASE, NAV_GROUPS, navItem } from './nav'
+import { EXPLORE_ITEM, EXPLORE_ROUTES, NAV_GROUPS, navItem } from './nav'
 import { PeriodPicker } from './PeriodPicker'
 
 function Logo({ compact }: { compact?: boolean }) {
@@ -18,26 +18,34 @@ function Logo({ compact }: { compact?: boolean }) {
   )
 }
 
-function NavButton({ route, onClick }: { route: Route; onClick?: () => void }) {
+function NavButton({ route, onClick, minor }: { route: Route | 'explorar'; onClick?: () => void; minor?: boolean }) {
   const current = useUI((s) => s.route)
   const navigate = useUI((s) => s.navigate)
-  const item = navItem(route)
+  const unclassified = useUnclassifiedCount()
+  const explore = route === 'explorar'
+  const item = explore ? EXPLORE_ITEM : navItem(route)
   const Icon = item.icon
-  const active = current === route
+  const active = explore ? EXPLORE_ROUTES.includes(current) : current === route
+  const badge = route === 'clasificar' && unclassified > 0 ? unclassified : 0
   return (
     <button
       onClick={() => {
-        navigate(route)
+        navigate(explore ? (EXPLORE_ROUTES.includes(current) ? current : 'ciudad') : route)
         onClick?.()
       }}
       className={clsx(
-        'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition',
+        'group flex w-full items-center gap-3 rounded-lg px-3 transition',
+        minor ? 'py-1.5 text-[13px]' : 'py-2 text-sm',
         active ? 'bg-gradient-to-r from-accent/20 to-accent-2/5 text-ink ring-1 ring-accent/30' : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
       )}
     >
-      <Icon size={17} className={clsx(active ? 'text-accent-2' : 'text-ink-faint group-hover:text-ink-muted')} />
+      <Icon size={minor ? 15 : 17} className={clsx(active ? 'text-accent-2' : 'text-ink-faint group-hover:text-ink-muted')} />
       <span className="flex-1 text-left">{item.label}</span>
-      {item.phase > CURRENT_PHASE && <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-faint">F{item.phase}</span>}
+      {badge > 0 && (
+        <span className="num rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent-2" title={`${badge} sin clasificar`}>
+          {badge > 999 ? '999+' : badge}
+        </span>
+      )}
     </button>
   )
 }
@@ -45,20 +53,45 @@ function NavButton({ route, onClick }: { route: Route; onClick?: () => void }) {
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="flex flex-1 flex-col gap-5">
-      {NAV_GROUPS.map((g) => (
-        <div key={g.label}>
-          <div className="mb-1.5 px-3 text-[11px] font-medium tracking-wider text-ink-faint uppercase">{g.label}</div>
+      {NAV_GROUPS.map((g, i) => (
+        <div key={g.label ?? i} className={clsx(g.minor && 'mt-auto')}>
+          {g.label && <div className="mb-1.5 px-3 text-[11px] font-medium tracking-wider text-ink-faint uppercase">{g.label}</div>}
           <div className="flex flex-col gap-0.5">
             {g.routes.map((r) => (
-              <NavButton key={r} route={r} onClick={onNavigate} />
+              <NavButton key={r} route={r} minor={g.minor} onClick={onNavigate} />
             ))}
           </div>
         </div>
       ))}
-      <div className="mt-auto">
-        <NavButton route="ajustes" onClick={onNavigate} />
-      </div>
     </nav>
+  )
+}
+
+/** Pestañas de Explorar: las cuatro vistas del dinero, a un toque. */
+function ExploreTabs() {
+  const current = useUI((s) => s.route)
+  const navigate = useUI((s) => s.navigate)
+  return (
+    <div className="flex min-w-0 overflow-x-auto rounded-lg border border-line bg-surface p-0.5">
+      {EXPLORE_ROUTES.map((r) => {
+        const it = navItem(r)
+        const Icon = it.icon
+        return (
+          <button
+            key={r}
+            onClick={() => navigate(r)}
+            title={it.blurb}
+            className={clsx(
+              'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+              current === r ? 'bg-surface-2 text-ink shadow-sm ring-1 ring-line-strong' : 'text-ink-muted hover:text-ink',
+            )}
+          >
+            <Icon size={14} className={current === r ? 'text-accent-2' : undefined} />
+            {it.label}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -139,17 +172,22 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
   const openImport = useUI((s) => s.openImport)
   const editMovement = useUI((s) => s.editMovement)
   const item = navItem(route)
+  const explore = EXPLORE_ROUTES.includes(route)
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-canvas/70 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur-xl sm:px-6">
       <div className="flex items-center gap-3">
         <button onClick={onMenu} className="-ml-1 rounded-md p-1.5 text-ink-muted hover:bg-surface-2 md:hidden" aria-label="Menú">
           <Menu size={20} />
         </button>
-        <h1 className="font-display text-xl font-semibold tracking-tight md:text-2xl">{item.label}</h1>
+        <h1 className="font-display text-xl font-semibold tracking-tight md:text-2xl">{explore ? 'Explorar' : item.label}</h1>
+        {explore && (
+          <div className="hidden min-w-0 md:block">
+            <ExploreTabs />
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="subtle" onClick={() => openImport(true)} title="Importar Excel o CSV">
-            <Upload size={15} />
-            <span className="hidden sm:inline">Importar</span>
+          <Button variant="ghost" onClick={() => openImport(true)} title="Importar Excel o CSV" aria-label="Importar Excel o CSV">
+            <Upload size={16} />
           </Button>
           <Button variant="primary" onClick={() => editMovement('')} title="Nuevo movimiento">
             <Plus size={16} />
@@ -157,6 +195,11 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
           </Button>
         </div>
       </div>
+      {explore && (
+        <div className="mt-3 md:hidden">
+          <ExploreTabs />
+        </div>
+      )}
       {item.filters && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <PeriodPicker />
@@ -171,21 +214,29 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
 
 function BottomNav({ onMore }: { onMore: () => void }) {
   const current = useUI((s) => s.route)
+  const items: (Route | 'explorar')[] = ['inicio', 'explorar', 'movimientos', 'clasificar']
   const navigate = useUI((s) => s.navigate)
-  const items: Route[] = ['inicio', 'ciudad', 'movimientos', 'objetivos']
+  const unclassified = useUnclassifiedCount()
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-canvas/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
       {items.map((r) => {
-        const it = navItem(r)
+        const explore = r === 'explorar'
+        const it = explore ? EXPLORE_ITEM : navItem(r)
         const Icon = it.icon
+        const active = explore ? EXPLORE_ROUTES.includes(current) : current === r
         return (
           <button
             key={r}
-            onClick={() => navigate(r)}
-            className={clsx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px]', current === r ? 'text-accent-2' : 'text-ink-faint')}
+            onClick={() => navigate(explore ? (EXPLORE_ROUTES.includes(current) ? current : 'ciudad') : r)}
+            className={clsx('relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px]', active ? 'text-accent-2' : 'text-ink-faint')}
           >
             <Icon size={20} />
             {it.label}
+            {r === 'clasificar' && unclassified > 0 && (
+              <span className="num absolute top-1 left-1/2 ml-2 rounded-full bg-accent px-1 text-[9px] leading-4 font-semibold text-white">
+                {unclassified > 99 ? '99+' : unclassified}
+              </span>
+            )}
           </button>
         )
       })}

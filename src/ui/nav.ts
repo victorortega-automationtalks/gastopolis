@@ -1,5 +1,6 @@
 import {
   Building2,
+  Compass,
   FileText,
   FlaskConical,
   Gamepad2,
@@ -128,13 +129,23 @@ export const NAV: NavItem[] = [
   { route: 'ajustes', label: 'Ajustes', icon: Settings, phase: 1, filters: false, blurb: '' },
 ]
 
-export const NAV_GROUPS: { label: string; routes: Route[] }[] = [
-  { label: 'Explorar', routes: ['inicio', 'ciudad', 'cordillera', 'balanza', 'rio'] },
-  { label: 'Gestionar', routes: ['movimientos', 'clasificar', 'cuentas', 'categorias', 'informes'] },
+/** Las cuatro vistas para explorar el dinero: en el menú son una sola entrada, «Explorar», con pestañas arriba. */
+export const EXPLORE_ROUTES: Route[] = ['ciudad', 'cordillera', 'balanza', 'rio']
+
+/**
+ * Menú: lo de cada día arriba (y Explorar como una sola entrada), lo de planificar debajo y lo que se configura de vez
+ * en cuando, más discreto, al final.
+ */
+export const NAV_GROUPS: { label?: string; routes: (Route | 'explorar')[]; minor?: boolean }[] = [
+  { routes: ['inicio', 'movimientos', 'clasificar', 'explorar'] },
   { label: 'Planificar', routes: ['objetivos', 'fugas', 'laboratorio'] },
+  { label: 'Configurar', routes: ['cuentas', 'categorias', 'informes', 'ajustes'], minor: true },
 ]
 
 export const navItem = (r: Route) => NAV.find((n) => n.route === r)!
 
 /** Fase hasta la que hay pantallas construidas. */
 export const CURRENT_PHASE = 8
+
+/** La entrada «Explorar» del menú. */
+export const EXPLORE_ITEM = { label: 'Explorar', icon: Compass }

@@ -8,6 +8,7 @@ import { today } from '../model/period'
 import type { Account, Category, Goal, LeakDecision, Movement, Rule, Scenario, Settings } from '../model/types'
 import { useUI } from '../store/ui'
 import { queries } from './queries'
+import { reserveCategoryIds } from './repo'
 
 const EMPTY_M: Movement[] = []
 const EMPTY_C: Category[] = []
@@ -123,4 +124,17 @@ export function useFilteredMovements(): { all: Movement[]; filtered: Movement[];
     [movements, filters, categories, settings.fiscalYearStart],
   )
   return { all: movements, filtered, loading }
+}
+
+/** Cuántos movimientos siguen sin clasificar (en «Sin clasificar» u «Otros ingresos»): el número del Clasificador. */
+export function useUnclassifiedCount(): number {
+  const { movements } = useRawMovements()
+  const categories = useCategories()
+  return useMemo(() => {
+    const reserve = new Set(reserveCategoryIds(categories))
+    if (!reserve.size) return 0
+    let n = 0
+    for (const m of movements) if (reserve.has(m.categoryId)) n++
+    return n
+  }, [movements, categories])
 }

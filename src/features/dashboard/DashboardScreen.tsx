@@ -227,6 +227,16 @@ export function DashboardScreen() {
           </div>
         ))}
       </div>
+      {!editing && dash.hidden.length > 0 && (
+        <button onClick={() => setEditing(true)} className="mx-auto text-xs text-ink-faint hover:text-ink">
+          {dash.hidden.length === 1 ? 'Una tarjeta más' : `${dash.hidden.length} tarjetas más`} (
+          {dash.hidden
+            .slice(0, 3)
+            .map((id) => CARD_LABEL[id].toLowerCase())
+            .join(', ')}
+          {dash.hidden.length > 3 ? '…' : ''}) en <span className="underline">Personalizar</span>
+        </button>
+      )}
     </div>
   )
 }
