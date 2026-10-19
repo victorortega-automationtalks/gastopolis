@@ -10,6 +10,7 @@ import {
   consentLimit,
   consentUntil,
   fetchRange,
+  suggestSyncFrom,
   internalTransfers,
   isDue,
   manualSync,
@@ -45,6 +46,24 @@ describe('sincronización: cuándo y qué pedir', () => {
     expect(fetchRange({}, '2026-10-19')).toEqual({ dateFrom: '2024-10-19', dateTo: '2026-10-19' })
     // Seis meses ya en casa: solo la última semana larga, no todo otra vez.
     expect(fetchRange({ syncedThrough: '2026-10-15' }, '2026-10-19')).toEqual({ dateFrom: '2026-10-08', dateTo: '2026-10-19' })
+  })
+
+  it('nunca pide antes de «traer desde», ni la primera vez ni después', () => {
+    expect(fetchRange({ syncFrom: '2026-10-01' }, '2026-10-19')).toEqual({ dateFrom: '2026-10-01', dateTo: '2026-10-19' })
+    // El solape de 7 días tampoco cruza esa fecha.
+    expect(fetchRange({ syncFrom: '2026-10-10', syncedThrough: '2026-10-12' }, '2026-10-19').dateFrom).toBe('2026-10-10')
+    expect(fetchRange({ syncFrom: '2026-01-01', syncedThrough: '2026-10-15' }, '2026-10-19').dateFrom).toBe('2026-10-08')
+  })
+
+  it('propone traer del banco desde el día siguiente a lo último importado o apuntado (sin contar efectivo ni lo del banco)', () => {
+    const ms = [
+      { date: '2026-09-30', source: 'import' as const },
+      { date: '2026-10-05', source: 'manual' as const, accountId: 'cartera' },
+      { date: '2026-10-15', source: 'bank' as const, accountId: 'bbva' },
+      { date: '2026-09-20', source: 'manual' as const },
+    ]
+    expect(suggestSyncFrom(ms)).toBe('2026-10-01')
+    expect(suggestSyncFrom([{ date: '2026-10-15', source: 'bank' as const }])).toBeUndefined()
   })
 
   it('se sincroniza sola cada X horas (6 como mínimo) y nunca con el permiso caducado', () => {

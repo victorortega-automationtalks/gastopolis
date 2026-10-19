@@ -205,7 +205,8 @@ export async function authorize(aspsp: Aspsp, pasted: Promise<string>, handle: A
 }
 
 /** Guarda las cuentas elegidas: crea las nuevas y, en las que ya había, renueva la sesión sin perder lo traído. */
-export async function saveConnection(session: EbSession, chosen: (OfferedAccount & { label: string })[]): Promise<string[]> {
+/** `syncFrom`: desde qué día traer en las cuentas nuevas (las que se renuevan conservan el suyo). */
+export async function saveConnection(session: EbSession, chosen: (OfferedAccount & { label: string })[], syncFrom?: string): Promise<string[]> {
   const ids: string[] = []
   for (const a of chosen) {
     const link: BankLink = {
@@ -221,7 +222,7 @@ export async function saveConnection(session: EbSession, chosen: (OfferedAccount
     if (a.existingId) {
       await updateBankLink(a.existingId, { ...link, lastError: undefined })
       ids.push(a.existingId)
-    } else ids.push(await createAccount({ name: a.label, kind: 'bank', bank: link }))
+    } else ids.push(await createAccount({ name: a.label, kind: 'bank', bank: { ...link, ...(syncFrom ? { syncFrom } : {}) } }))
   }
   return ids
 }

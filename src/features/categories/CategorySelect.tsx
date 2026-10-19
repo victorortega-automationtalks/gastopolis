@@ -72,7 +72,10 @@ export function CategorySelect({
               e.preventDefault()
               void create()
             }
-            if (e.key === 'Escape') setCreating(false)
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              setCreating(false)
+            }
           }}
           aria-label="Nombre de la categoría nueva"
         />
@@ -85,10 +88,10 @@ export function CategorySelect({
             ))}
           </select>
         )}
-        <Button size="sm" variant="primary" disabled={!name.trim()} onClick={() => void create()} aria-label="Crear categoría">
+        <Button type="button" size="sm" variant="primary" disabled={!name.trim()} onClick={() => void create()} aria-label="Crear categoría">
           <Check size={14} />
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setCreating(false)} aria-label="Cancelar">
+        <Button type="button" size="sm" variant="ghost" onClick={() => setCreating(false)} aria-label="Cancelar">
           <X size={14} />
         </Button>
       </div>

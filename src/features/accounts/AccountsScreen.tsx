@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { bankEnabled, syncAccounts, syncAccount } from '../../bank/run'
 import { consentState, manualSync, MIN_AUTO_HOURS } from '../../bank/sync'
 import { useAccounts, useBankSecret, useRawMovements, useSettings } from '../../data/hooks'
-import { createAccount, deleteAccount, deleteBankSecret, saveSettings, updateAccount } from '../../data/repo'
+import { createAccount, deleteAccount, deleteBankSecret, saveSettings, updateAccount, updateBankLink } from '../../data/repo'
 import { fmtDate } from '../../model/format'
 import type { Account, AccountKind } from '../../model/types'
 import { useUI } from '../../store/ui'
@@ -55,13 +55,19 @@ export function AccountsScreen() {
   const now = useNow()
 
   const stats = useMemo(() => {
-    const m = new Map<string, { n: number; net: number }>()
+    const m = new Map<string, { n: number; net: number; fresh: number; latest: number }>()
     for (const mv of movements) {
       if (!mv.accountId) continue
-      const s = m.get(mv.accountId) ?? { n: 0, net: 0 }
+      const s = m.get(mv.accountId) ?? { n: 0, net: 0, fresh: 0, latest: 0 }
       s.n++
       s.net += mv.amount
+      if (mv.source === 'bank' && mv.createdAt > s.latest) s.latest = mv.createdAt
       m.set(mv.accountId, s)
+    }
+    // Lo que trajo la última sincronización de cada cuenta (llegó en el mismo minuto que lo más reciente).
+    for (const mv of movements) {
+      const s = mv.accountId ? m.get(mv.accountId) : undefined
+      if (s && mv.source === 'bank' && s.latest - mv.createdAt < 120_000) s.fresh++
     }
     return m
   }, [movements])
@@ -239,7 +245,23 @@ export function AccountsScreen() {
   )
 }
 
-function BankRow({ account: a, now, stats, onRenew }: { account: Account; now: number; stats?: { n: number }; onRenew: () => void }) {
+function BankRow({
+  account: a,
+  now,
+  stats,
+  onRenew,
+}: {
+  account: Account
+  now: number
+  stats?: { n: number; fresh: number; latest: number }
+  onRenew: () => void
+}) {
+  const navigate = useUI((s) => s.navigate)
+  const setFilters = useUI((s) => s.setFilters)
+  const showNew = () => {
+    setFilters({ accountIds: [a.id], origin: 'new', period: { preset: 'all' }, search: '', categoryIds: [] })
+    navigate('movimientos')
+  }
   const toast = useUI((s) => s.toast)
   const [busy, setBusy] = useState(false)
   const bank = a.bank!
@@ -292,6 +314,12 @@ function BankRow({ account: a, now, stats, onRenew }: { account: Account; now: n
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <span className="text-ink-muted">{bank.lastSyncAt ? `Sincronizado ${ago(bank.lastSyncAt)}` : 'Aún sin sincronizar'}</span>
+        {stats && stats.fresh > 0 && (
+          <button className="font-medium text-accent-2 hover:underline" onClick={showNew}>
+            Última llegada: {stats.fresh} {stats.fresh === 1 ? 'movimiento' : 'movimientos'} ({ago(stats.latest)}) · ver
+          </button>
+        )}
+        <SyncFrom account={a} />
         <span className={clsx(consent.state === 'ok' ? 'text-ink-muted' : consent.state === 'expiring' ? 'text-warn' : 'text-danger')}>
           {consent.state === 'expired'
             ? 'El permiso del banco ha caducado'
@@ -349,6 +377,48 @@ function AccountName({ account: a }: { account: Account }) {
     >
       <span className="truncate">{a.name}</span>
       <Pencil size={13} className="shrink-0 text-ink-faint transition group-hover:text-ink" />
+    </button>
+  )
+}
+
+/** «Trae desde»: lo anterior ya lo tienes (p. ej. importado del Excel). Adelantarla vuelve a pedir desde esa fecha. */
+function SyncFrom({ account: a }: { account: Account }) {
+  const toast = useUI((s) => s.toast)
+  const [editing, setEditing] = useState(false)
+  const bank = a.bank!
+  const [value, setValue] = useState(bank.syncFrom ?? '')
+  const save = async (next: string) => {
+    setEditing(false)
+    const from = next || undefined
+    if (from === bank.syncFrom) return
+    // Si la fecha se adelanta (o se quita), hay que volver a pedir desde ella; lo ya traído no se duplica.
+    const earlier = !from || (bank.syncFrom !== undefined && from < bank.syncFrom)
+    await updateBankLink(a.id, { syncFrom: from, ...(earlier ? { syncedThrough: undefined } : {}) })
+    toast(from ? `${a.name}: se traerá desde el ${fmtDate(from)}` : `${a.name}: se traerá todo lo que dé el banco`)
+  }
+  if (editing)
+    return (
+      <span className="flex items-center gap-1.5">
+        <input type="date" className="field h-7 w-auto py-0 text-xs" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Traer desde" />
+        <Button size="sm" className="h-7" variant="primary" onClick={() => void save(value)}>
+          Guardar
+        </Button>
+        <Button size="sm" className="h-7" variant="ghost" onClick={() => void save('')}>
+          Todo
+        </Button>
+      </span>
+    )
+  return (
+    <button
+      className="group flex items-center gap-1 text-ink-muted hover:text-ink"
+      onClick={() => {
+        setValue(bank.syncFrom ?? '')
+        setEditing(true)
+      }}
+      title="Lo anterior a esta fecha no se pide al banco (ya lo tienes importado o apuntado)"
+    >
+      {bank.syncFrom ? `Trae desde el ${fmtDate(bank.syncFrom)}` : 'Trae todo lo que dé el banco'}
+      <Pencil size={11} className="text-ink-faint group-hover:text-ink" />
     </button>
   )
 }

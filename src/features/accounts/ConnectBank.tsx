@@ -3,6 +3,9 @@ import { ExternalLink, Landmark, Loader2, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Aspsp, EbSession } from '../../bank/enablebanking'
 import { authorize, listBanks, offeredAccounts, saveConnection, syncAccount, type OfferedAccount, type SyncOutcome } from '../../bank/run'
+import { suggestSyncFrom } from '../../bank/sync'
+import { fmtDate } from '../../model/format'
+import { useRawMovements } from '../../data/hooks'
 import { queries } from '../../data/queries'
 import { errorMessage } from '../../lib/errors'
 import { openExternal } from '../../platform'
@@ -38,6 +41,10 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
   const [offered, setOffered] = useState<(OfferedAccount & { label: string; on: boolean })[]>([])
   const [pastedText, setPastedText] = useState('')
   const [outcomes, setOutcomes] = useState<SyncOutcome[] | null>(null)
+  const { movements } = useRawMovements()
+  // Desde cuándo traer: por defecto, el día siguiente a lo último importado o apuntado (el Excel y el banco no se pisan).
+  const suggested = useMemo(() => suggestSyncFrom(movements), [movements])
+  const [syncFrom, setSyncFrom] = useState<string | null>(null)
   const pasteResolver = useRef<((v: string) => void) | null>(null)
   const authUrl = useRef<string | null>(null)
   const browser = useRef(false)
@@ -93,6 +100,7 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
     const ids = await saveConnection(
       session,
       offered.filter((a) => a.on),
+      (syncFrom ?? suggested) || undefined,
     )
     const results: SyncOutcome[] = []
     for (const id of ids) results.push(await syncAccount(id))
@@ -234,6 +242,30 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
               {a.existingId && <span className="text-xs text-accent-2">ya la tienes: se renueva</span>}
             </div>
           ))}
+          {offered.some((a) => a.on && !a.existingId) && (
+            <div className="space-y-2 rounded-xl border border-line bg-surface p-3 text-sm">
+              <p className="font-medium text-ink">¿Desde cuándo traer movimientos?</p>
+              <p className="text-xs text-ink-muted">
+                {suggested
+                  ? `Lo que tienes importado o apuntado llega hasta el ${fmtDate(addDays(suggested, -1))}. Para no duplicarlo, lo recomendable es traer del banco desde el día siguiente.`
+                  : 'No tienes nada importado: puedes traer todo lo que dé el banco (hasta 2 años, según el banco).'}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                {suggested && (
+                  <Button size="sm" variant={(syncFrom ?? suggested) === suggested ? 'primary' : 'subtle'} onClick={() => setSyncFrom(suggested)}>
+                    Desde el {fmtDate(suggested)}
+                  </Button>
+                )}
+                <Button size="sm" variant={!(syncFrom ?? suggested) ? 'primary' : 'subtle'} onClick={() => setSyncFrom('')}>
+                  Todo lo que dé el banco
+                </Button>
+                <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+                  Otra fecha
+                  <input type="date" className="field h-8 w-auto py-0" value={syncFrom ?? suggested ?? ''} onChange={(e) => setSyncFrom(e.target.value)} />
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -257,3 +289,5 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
     </Modal>
   )
 }
+
+const addDays = (iso: string, days: number) => new Date(Date.parse(iso) + days * 86_400_000).toISOString().slice(0, 10)

@@ -144,13 +144,24 @@ function SearchBox() {
 }
 
 /** Categorías filtradas (p. ej. al venir de una fuga): se ven y se quitan aquí. */
+const ORIGIN_LABEL = { bank: 'Del banco', manual: 'A mano', import: 'Importados', new: 'Nuevo del banco' } as const
+
 function CategoryFilterChips() {
   const ids = useUI((s) => s.filters.categoryIds)
+  const origin = useUI((s) => s.filters.origin)
   const setFilters = useUI((s) => s.setFilters)
   const catMap = useCategoryMap()
-  if (!ids.length) return null
+  if (!ids.length && (!origin || origin === 'all')) return null
   return (
     <div className="flex flex-wrap items-center gap-1.5">
+      {origin && origin !== 'all' && (
+        <span className="flex items-center gap-1 rounded-full border border-accent-2/40 bg-accent-2/10 py-1 pr-1 pl-2.5 text-xs">
+          {ORIGIN_LABEL[origin]}
+          <button onClick={() => setFilters({ origin: 'all' })} className="rounded-full p-0.5 hover:bg-surface-2" aria-label="Quitar filtro de origen">
+            <X size={12} />
+          </button>
+        </span>
+      )}
       {ids.map((id) => (
         <span key={id} className="flex items-center gap-1 rounded-full border border-accent-2/40 bg-accent-2/10 py-1 pr-1 pl-2.5 text-xs">
           {catMap.get(id)?.name ?? 'Categoría'}

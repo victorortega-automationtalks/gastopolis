@@ -18,7 +18,14 @@ export interface Filters {
   categoryIds: string[]
   /** Vacío = todas. `NO_ACCOUNT` = los que no tienen cuenta. */
   accountIds?: string[]
+  /** De dónde vienen: del banco, apuntados a mano, importados, o lo que el banco ha traído en los últimos 7 días. */
+  origin?: Origin
 }
+
+export type Origin = 'all' | 'bank' | 'manual' | 'import' | 'new'
+
+/** Días que un movimiento del banco cuenta como «nuevo». */
+export const NEW_DAYS = 7
 
 export const NO_ACCOUNT = '__sin-cuenta__'
 
