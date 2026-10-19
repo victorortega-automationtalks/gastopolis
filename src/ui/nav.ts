@@ -2,6 +2,7 @@ import {
   Building2,
   FileText,
   FlaskConical,
+  Landmark,
   LayoutDashboard,
   ListOrdered,
   Mountain,
@@ -74,6 +75,14 @@ export const NAV: NavItem[] = [
     blurb: 'De dónde viene tu dinero y a dónde va: ingresos que se reparten en gastos, ahorro e inversión.',
   },
   { route: 'movimientos', label: 'Movimientos', icon: ListOrdered, phase: 1, filters: true, blurb: '' },
+  {
+    route: 'cuentas',
+    label: 'Cuentas',
+    icon: Landmark,
+    phase: 8,
+    filters: false,
+    blurb: 'Tus bancos conectados (solo lectura), el efectivo y otras cuentas, cada una con sus movimientos.',
+  },
   { route: 'categorias', label: 'Categorías', icon: Shapes, phase: 1, filters: false, blurb: '' },
   {
     route: 'informes',
@@ -112,11 +121,11 @@ export const NAV: NavItem[] = [
 
 export const NAV_GROUPS: { label: string; routes: Route[] }[] = [
   { label: 'Explorar', routes: ['inicio', 'ciudad', 'cordillera', 'balanza', 'rio'] },
-  { label: 'Gestionar', routes: ['movimientos', 'categorias', 'informes'] },
+  { label: 'Gestionar', routes: ['movimientos', 'cuentas', 'categorias', 'informes'] },
   { label: 'Planificar', routes: ['objetivos', 'fugas', 'laboratorio'] },
 ]
 
 export const navItem = (r: Route) => NAV.find((n) => n.route === r)!
 
 /** Fase hasta la que hay pantallas construidas. */
-export const CURRENT_PHASE = 7
+export const CURRENT_PHASE = 8

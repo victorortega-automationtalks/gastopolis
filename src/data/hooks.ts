@@ -3,8 +3,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo, useSyncExternalStore } from 'react'
 import { applyFilters } from '../model/aggregate'
 import { DEFAULT_SETTINGS } from '../model/defaults'
+import { bookMovements } from '../model/payday'
 import { today } from '../model/period'
-import type { Category, Goal, LeakDecision, Movement, Rule, Scenario, Settings } from '../model/types'
+import type { Account, Category, Goal, LeakDecision, Movement, Rule, Scenario, Settings } from '../model/types'
 import { useUI } from '../store/ui'
 import { queries } from './queries'
 
@@ -43,7 +44,26 @@ const movementsStore = (() => {
   }
 })()
 
+/** Movimientos contables, calculados una vez por cambio de datos para toda la app (no uno por componente). */
+let booked: { raw: Movement[]; on: boolean; out: Movement[] } | null = null
+function bookedOf(raw: Movement[], on: boolean): Movement[] {
+  if (!on) return raw
+  if (!booked || booked.raw !== raw || booked.on !== on) booked = { raw, on, out: bookMovements(raw) }
+  return booked.out
+}
+
+/**
+ * Movimientos para analizar: con la nómina inteligente activada, los cobros que pagan el mes siguiente llevan ya la
+ * fecha de ese mes (y la real en `realDate`). Para enseñar fechas, `shownDate(m)`; para editar, `useRawMovements`.
+ */
 export function useMovements(): { movements: Movement[]; loading: boolean } {
+  const ms = useSyncExternalStore(movementsStore.subscribe, movementsStore.get)
+  const { paydayShift } = useSettings()
+  return { movements: ms ? bookedOf(ms, paydayShift !== false) : EMPTY_M, loading: ms === undefined }
+}
+
+/** Movimientos tal cual están guardados (fechas reales). */
+export function useRawMovements(): { movements: Movement[]; loading: boolean } {
   const ms = useSyncExternalStore(movementsStore.subscribe, movementsStore.get)
   return { movements: ms ?? EMPTY_M, loading: ms === undefined }
 }
@@ -76,6 +96,16 @@ export function useDecisions() {
 const EMPTY_S: Scenario[] = []
 export function useScenarios() {
   return useLiveQuery(queries.scenarios, []) ?? EMPTY_S
+}
+
+const EMPTY_A: Account[] = []
+export function useAccounts(): Account[] {
+  return useLiveQuery(queries.accountsInOrder, []) ?? EMPTY_A
+}
+
+/** La credencial de Enable Banking (undefined si no hay; null mientras carga). */
+export function useBankSecret() {
+  return useLiveQuery(async () => (await queries.bankSecret()) ?? undefined, [], null)
 }
 
 export function useBatches() {

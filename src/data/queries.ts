@@ -13,4 +13,6 @@ export const queries = {
   goals: () => db.goals.toArray(),
   decisions: () => db.decisions.toArray(),
   scenarios: () => db.scenarios.orderBy('createdAt').toArray(),
+  accountsInOrder: () => db.accounts.orderBy('order').toArray(),
+  bankSecret: () => db.secrets.get('enablebanking'),
 }

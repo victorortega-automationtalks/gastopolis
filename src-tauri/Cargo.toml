@@ -1,6 +1,6 @@
 [package]
 name = "gastopolis"
-version = "0.9.0"
+version = "0.10.0"
 description = "Gastópolis: tu dinero como una ciudad en 3D, sin salir de tu ordenador"
 authors = ["Gastópolis"]
 license = ""
@@ -14,10 +14,22 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2.7.3", features = [] }
 
-# Sin plugins de red (http, updater, websocket…): la app no tiene con qué conectarse a nada.
+# Sin plugins de red (http, updater, websocket…): la web no tiene con qué conectarse a nada.
 [dependencies]
 tauri = { version = "2.12.4", features = [] }
 tauri-plugin-dialog = "2"
+# Sincronización con el banco (opcional, solo lectura, solo api.enablebanking.com): HTTPS con el TLS del sistema
+# (Schannel en Windows), firma RS256 del token y abrir el navegador para que entres en tu banco.
+ureq = { version = "3", default-features = false, features = ["native-tls"] }
+rsa = "0.9"
+sha2 = { version = "0.10", features = ["oid"] }
+base64 = "0.22"
+open = "5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+rand = "0.8"
 
 [profile.release]
 codegen-units = 1

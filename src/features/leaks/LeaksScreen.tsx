@@ -1,3 +1,4 @@
+import { shownDate } from '../../model/payday'
 import clsx from 'clsx'
 import { Check, ChevronDown, CircleSlash, EyeOff, FlaskConical, ListFilter, RotateCcw, ShieldCheck, Trash2, X } from 'lucide-react'
 import { newId } from '../../lib/id'
@@ -216,7 +217,7 @@ function LeakCard({ leak: l, status, money }: { leak: Leak; status?: LeakStatus;
         <ul className="mt-3 max-h-60 divide-y divide-line overflow-y-auto rounded-lg border border-line text-sm">
           {l.evidence.slice(0, 60).map((m) => (
             <li key={m.id} className={clsx('flex items-center gap-3 px-3 py-1.5', m.id === l.duplicateId && 'bg-expense/5')}>
-              <span className="num w-24 shrink-0 text-xs text-ink-faint">{fmtDate(m.date)}</span>
+              <span className="num w-24 shrink-0 text-xs text-ink-faint">{fmtDate(shownDate(m))}</span>
               <span className="min-w-0 flex-1 truncate">{m.concept}</span>
               <span className="hidden text-xs text-ink-faint sm:inline">{catMap.get(m.categoryId)?.name}</span>
               <span className="font-medium">{money(m.amount)}</span>

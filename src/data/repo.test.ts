@@ -30,6 +30,13 @@ import {
   undoImport,
   updateCategory,
   validateBackup,
+  applyBankSync,
+  bankFallbacks,
+  createAccount,
+  deleteAccount,
+  restoreMovements,
+  saveBankSecret,
+  createStarterCategories,
 } from './repo'
 import { buildSample } from './sample'
 import { DEFAULT_ASSUMPTIONS } from '../model/lab'
@@ -300,5 +307,88 @@ describe('migración de la base de datos', () => {
     expect(await v2.decisions.count()).toBe(1)
     expect(await v2.scenarios.count()).toBe(0)
     v2.close()
+  })
+})
+
+describe('cuentas y banco', () => {
+  beforeEach(async () => {
+    await createStarterCategories()
+  })
+  const link = (over = {}) => ({
+    provider: 'enablebanking' as const,
+    aspsp: { name: 'BBVA', country: 'ES' },
+    accountUid: 'u1',
+    currency: 'EUR',
+    sessionId: 's1',
+    validUntil: '2027-04-01T00:00:00Z',
+    ...over,
+  })
+
+  it('aplica una sincronización entera: nuevos, enlazados, traspasos y estado de la cuenta', async () => {
+    const cat = await db.categories.toArray()
+    const expense = cat.find((c) => c.kind === 'expense')!
+    const bbva = await createAccount({ name: 'BBVA', kind: 'bank', bank: link() })
+    const rev = await createAccount({ name: 'Revolut', kind: 'bank', bank: link({ accountUid: 'u2' }) })
+    const manual = await addMovement({ date: '2026-10-09', amount: 12.5, concept: 'Lidl', categoryId: expense.id })
+    const fb = await bankFallbacks()
+    // Se crean una vez y luego se reutilizan.
+    expect(await bankFallbacks()).toEqual(fb)
+    const base = { tags: [], source: 'bank' as const, createdAt: 0, conceptKey: 'x', concept: 'x' }
+    await applyBankSync(
+      bbva,
+      {
+        added: [{ ...base, id: 'out', date: '2026-10-15', amount: -200, kind: 'expense', categoryId: fb.expense, accountId: bbva, externalId: 'eb:1' }],
+        linked: [{ id: manual, externalId: 'eb:2' }],
+      },
+      { pairs: [], categoryId: fb.transfer },
+      { lastSyncAt: 1, syncedThrough: '2026-10-19' },
+    )
+    await applyBankSync(
+      rev,
+      {
+        added: [{ ...base, id: 'in', date: '2026-10-15', amount: 200, kind: 'income', categoryId: fb.income, accountId: rev, externalId: 'eb:3' }],
+        linked: [],
+      },
+      { pairs: [['out', 'in']], categoryId: fb.transfer },
+      { lastSyncAt: 2 },
+    )
+    const out = await db.movements.get('out')
+    const inn = await db.movements.get('in')
+    expect([out?.kind, out?.amount, inn?.kind, inn?.amount]).toEqual(['transfer', -200, 'transfer', 200])
+    expect(await db.movements.get(manual)).toMatchObject({ accountId: bbva, externalId: 'eb:2' })
+    expect((await db.accounts.get(bbva))?.bank).toMatchObject({ syncedThrough: '2026-10-19', lastSyncAt: 1, sessionId: 's1' })
+  })
+
+  it('al deshacer, nunca se guarda la fecha contable de la nómina inteligente', async () => {
+    const cat = (await db.categories.toArray()).find((c) => c.kind === 'income')!
+    const id = await addMovement({ date: '2026-09-28', amount: 2000, concept: 'Nómina', categoryId: cat.id })
+    const m = (await db.movements.get(id))!
+    await db.movements.delete(id)
+    await restoreMovements([{ ...m, date: '2026-10-01', realDate: '2026-09-28' }])
+    const back = (await db.movements.get(id))!
+    expect(back.date).toBe('2026-09-28')
+    expect('realDate' in back).toBe(false)
+  })
+
+  it('quitar una cuenta conserva sus movimientos (sin cuenta) o los borra, según se pida', async () => {
+    const cat = (await db.categories.toArray())[0]
+    const cash = await createAccount({ name: 'Cartera', kind: 'cash' })
+    const a = await addMovement({ date: '2026-10-01', amount: 5, concept: 'Café', categoryId: cat.id, accountId: cash })
+    await deleteAccount(cash)
+    expect((await db.movements.get(a))?.accountId).toBeUndefined()
+    const other = await createAccount({ name: 'Hucha', kind: 'other' })
+    const b = await addMovement({ date: '2026-10-01', amount: 5, concept: 'Café', categoryId: cat.id, accountId: other })
+    await deleteAccount(other, true)
+    expect(await db.movements.get(b)).toBeUndefined()
+  })
+
+  it('las copias llevan las cuentas pero nunca la credencial del banco', async () => {
+    await createAccount({ name: 'BBVA', kind: 'bank', bank: link() })
+    await saveBankSecret({ appId: 'app', privateKeyPem: '-----BEGIN PRIVATE KEY-----x', redirectUrl: 'http://localhost:47823/callback' })
+    const b = await exportBackup()
+    expect(b.accounts).toHaveLength(1)
+    expect(JSON.stringify(b)).not.toContain('PRIVATE KEY')
+    await restoreBackup(validateBackup(JSON.parse(JSON.stringify(b))))
+    expect(await db.accounts.count()).toBe(1)
   })
 })

@@ -1,11 +1,13 @@
+import { shownDate } from '../../model/payday'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import clsx from 'clsx'
 import { ArrowDown, ArrowUp, Trash2, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
-import { useCategories, useCategoryMap, useFilteredMovements, useSettings } from '../../data/hooks'
+import { useAccounts, useCategories, useCategoryMap, useFilteredMovements, useSettings } from '../../data/hooks'
 import { deleteMovements, recategorize, restoreMovements } from '../../data/repo'
 import { totals } from '../../model/aggregate'
-import { fmtDate, savingsPhrase } from '../../model/format'
+import { fmtDate, fmtMonth, savingsPhrase } from '../../model/format'
+import { NO_ACCOUNT } from '../../model/period'
 import type { Movement } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, CategoryChip, Money, Stat } from '../../ui/components/primitives'
@@ -29,7 +31,7 @@ export function MovementsScreen() {
   const rows = useMemo(() => {
     const name = (m: Movement) => catMap.get(m.categoryId)?.name ?? ''
     const cmp: Record<SortKey, (a: Movement, b: Movement) => number> = {
-      date: (a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt,
+      date: (a, b) => shownDate(a).localeCompare(shownDate(b)) || a.createdAt - b.createdAt,
       concept: (a, b) => a.concept.localeCompare(b.concept, 'es'),
       category: (a, b) => name(a).localeCompare(name(b), 'es'),
       amount: (a, b) => a.amount - b.amount,
@@ -90,6 +92,8 @@ export function MovementsScreen() {
           <Money value={t.transfer} kind="transfer" signed />
         </Stat>
       </Card>
+
+      <AccountFilter />
 
       {selected.size > 0 && (
         <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-surface-solid px-3 py-2 shadow-lg">
@@ -195,7 +199,12 @@ function MovementTable({
                   className="h-4 w-4 accent-[var(--accent)]"
                   aria-label={`Seleccionar ${m.concept}`}
                 />
-                <span className="num text-xs text-ink-muted">{fmtDate(m.date)}</span>
+                <span className="num text-xs text-ink-muted">{fmtDate(shownDate(m))}</span>
+                {m.realDate && (
+                  <span className="block text-[10px] text-accent-2" title="Nómina inteligente: este cobro paga el mes siguiente">
+                    cuenta en {fmtMonth(m.date.slice(0, 7)).split(' ')[0]}
+                  </span>
+                )}
                 <span className="min-w-0">
                   <span className="block truncate">{m.concept}</span>
                   <span className="block truncate text-xs text-ink-faint sm:hidden">{cat?.name}</span>
@@ -211,5 +220,39 @@ function MovementTable({
         </div>
       </div>
     </Card>
+  )
+}
+
+/** Filtro por cuenta (si hay cuentas): todas, una o varias, o las que no tienen cuenta. */
+function AccountFilter() {
+  const accounts = useAccounts()
+  const ids = useUI((s) => s.filters.accountIds) ?? []
+  const setFilters = useUI((s) => s.setFilters)
+  if (!accounts.length) return null
+  const toggle = (id: string) => setFilters({ accountIds: ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id] })
+  const chip = (id: string | null, label: string, color?: string) => {
+    const on = id === null ? !ids.length : ids.includes(id)
+    return (
+      <button
+        key={id ?? 'todas'}
+        onClick={() => (id === null ? setFilters({ accountIds: [] }) : toggle(id))}
+        aria-pressed={on}
+        className={clsx(
+          'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition',
+          on ? 'border-accent-2 bg-accent-2/10 text-ink' : 'border-line text-ink-muted hover:text-ink',
+        )}
+      >
+        {color && <span className="h-2 w-2 rounded-full" style={{ background: color }} />}
+        {label}
+      </button>
+    )
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por cuenta">
+      <span className="mr-1 text-xs text-ink-faint">Cuenta</span>
+      {chip(null, 'Todas')}
+      {accounts.filter((a) => !a.archived).map((a) => chip(a.id, a.name, a.color))}
+      {chip(NO_ACCOUNT, 'Sin cuenta')}
+    </div>
   )
 }

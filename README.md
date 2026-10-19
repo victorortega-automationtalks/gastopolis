@@ -2,9 +2,9 @@
 
 Tu dinero como una ciudad en 3D. Importa tu Excel de gastos y explóralo bloque a bloque, fija objetivos de ahorro, caza fugas de dinero y simula decisiones antes de tomarlas.
 
-**100 % privada:** todo se guarda en tu dispositivo. Sin cuentas, sin servidores, sin conexión: la app no tiene forma de enviar tus datos a ningún sitio.
+**Privada:** todo se guarda en tu dispositivo. Sin cuentas ni servidores. La única conexión es opcional: si conectas tus bancos (app de Windows), lee tus movimientos por PSD2 a través de Enable Banking, en modo solo lectura.
 
-> Estado: **las 7 fases completas** — fluida con más de 10.000 movimientos, instalable en Windows y en el iPhone, con informes en PDF, Excel y CSV. Inicio, Ciudad, Cordillera y Balanza en 3D con reproducción en el tiempo, Río, Laboratorio con el Horizonte 3D, Objetivos, Detector de fugas, reglas, importador, movimientos, categorías y ajustes. Plan completo en [`docs/DESIGN.md`](docs/DESIGN.md).
+> Estado: **8 fases** — fluida con más de 10.000 movimientos, instalable en Windows y en el iPhone, con informes en PDF, Excel y CSV, cuentas y bancos conectados (solo lectura). Inicio, Ciudad, Cordillera y Balanza en 3D con reproducción en el tiempo, Río, Laboratorio con el Horizonte 3D, Objetivos, Detector de fugas, reglas, importador, movimientos, categorías y ajustes. Plan completo en [`docs/DESIGN.md`](docs/DESIGN.md).
 >
 > La app arranca **vacía**: nada de lo que hay en el repositorio son datos reales. Los datos de ejemplo son inventados y solo se cargan si pulsas «Ver con datos de ejemplo».
 
@@ -41,6 +41,8 @@ npm run app:build:windows   # instalador de Windows desde Linux (cargo-xwin + ns
 - **Importar Excel/CSV** (`.xlsx`, `.xlsm`, `.xls`, `.csv`): detecta tablas de movimientos aunque estén una al lado de otra, propone el mapeo de columnas, convierte Ahorro/Cripto en transferencias, avisa de filas que no puede leer y no duplica si reimportas. Cada importación se puede deshacer.
 - **Movimientos**: tabla virtualizada, filtros por periodo, tipo y texto; edición, alta rápida (sugiere la categoría y recuerda tus conceptos habituales) y acciones en bloque con deshacer.
 - **Categorías y reglas**: jerarquía, color, icono, presupuesto mensual, cambio de tipo y fusión. Reglas «si el concepto contiene X → categoría» que se aplican al importar y al apuntar.
+- **Cuentas y bancos**: efectivo, cuentas manuales y bancos conectados (ABANCA, BBVA, Santander, CaixaBank, Revolut… vía Enable Banking, solo lectura, con tutorial dentro de la app). Sincroniza sola al abrir y cada pocas horas, solo lo nuevo; no duplica lo apuntado a mano y reconoce los traspasos entre tus cuentas. Avisa una semana antes de que caduque el permiso del banco.
+- **Nómina inteligente**: si cobras a final de mes, la nómina cuenta para el mes que paga (la fecha real se sigue viendo).
 - **Informes**: doce informes del periodo que elijas —resumen, evolución mensual, por categoría, categorías en el tiempo, por concepto, comparativa con el año anterior, presupuestos, suscripciones, objetivos, fugas, escenarios del Laboratorio y movimientos— o todos juntos con portada e índice. Se pueden acotar a unas categorías y se descargan en **PDF** (con gráficos), **Excel** (importes y fechas de verdad, una hoja por informe) o **CSV**. Se generan en el dispositivo, sin conexión.
 - **Ajustes**: moneda, inicio del año, tema Neón/Polar, umbrales del detector de fugas, copias de seguridad cifradas con contraseña (con aviso si hace mucho de la última), CSV, datos de ejemplo.
 

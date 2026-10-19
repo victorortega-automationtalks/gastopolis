@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Category, Goal, ImportBatch, LeakDecision, Merchant, Movement, Rule, Scenario, Settings } from '../model/types'
+import type { Account, BankSecret, Category, Goal, ImportBatch, LeakDecision, Merchant, Movement, Rule, Scenario, Settings } from '../model/types'
 
 export class GastopolisDB extends Dexie {
   movements!: EntityTable<Movement, 'id'>
@@ -11,6 +11,8 @@ export class GastopolisDB extends Dexie {
   settings!: EntityTable<Settings, 'id'>
   decisions!: EntityTable<LeakDecision, 'id'>
   scenarios!: EntityTable<Scenario, 'id'>
+  accounts!: EntityTable<Account, 'id'>
+  secrets!: EntityTable<BankSecret, 'id'>
 
   constructor(name = 'gastopolis') {
     super(name)
@@ -27,6 +29,8 @@ export class GastopolisDB extends Dexie {
     this.version(2).stores({ decisions: 'id' })
     // v3: escenarios guardados del Laboratorio.
     this.version(3).stores({ scenarios: 'id, createdAt' })
+    // v4: cuentas (efectivo, bancos…) y la credencial de Enable Banking, aparte para que no viaje en las copias.
+    this.version(4).stores({ accounts: 'id, order', secrets: 'id' })
   }
 }
 

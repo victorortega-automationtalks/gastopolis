@@ -1,3 +1,5 @@
+mod bank;
+
 use tauri::webview::Color;
 use tauri::{Url, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
@@ -75,7 +77,14 @@ fn is_internal(url: &Url) -> bool {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![save_text_file, save_binary_file])
+        .invoke_handler(tauri::generate_handler![
+            save_text_file,
+            save_binary_file,
+            bank::bank_request,
+            bank::bank_wait_callback,
+            bank::bank_cancel_callback,
+            bank::open_external
+        ])
         .setup(|app| {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Gastópolis")

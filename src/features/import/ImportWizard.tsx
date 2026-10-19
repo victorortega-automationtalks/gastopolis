@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { ChevronRight, FileSpreadsheet, TriangleAlert, Upload } from 'lucide-react'
 import { useMemo, useRef, useState, type DragEvent } from 'react'
-import { useCategories, useMovements, useRules } from '../../data/hooks'
+import { useCategories, useRawMovements, useRules } from '../../data/hooks'
 import { applyImport } from '../../data/repo'
 import { columnLetter, detectTables, headerOptions, ROLE_LABEL, ROLES, type DetectedTable, type Role } from '../../import/detect'
 import { buildPlan, defaultTableConfig, type ImportPlan, type SignMode, type TableConfig } from '../../import/plan'
@@ -17,7 +17,7 @@ export function ImportWizard() {
   const openImport = useUI((s) => s.openImport)
   const toast = useUI((s) => s.toast)
   const navigate = useUI((s) => s.navigate)
-  const { movements } = useMovements()
+  const { movements } = useRawMovements()
   const categories = useCategories()
   const rules = useRules()
 
