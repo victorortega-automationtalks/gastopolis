@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildSample } from '../data/sample'
 import { layoutRidge, smoothProfile } from '../scenes/ridge/layout'
+import { buildFrames } from './timeline'
 import { balanceSnapshot } from './balance'
 import { budgetStatus, dataAsOf, monthEndOf, monthProjection, noSpendStreak, previousRange } from './insights'
 import { detectRecurring, upcomingCharges } from './recurring'
@@ -155,23 +156,26 @@ describe('cordillera', () => {
     for (let k = 4; k <= 8; k++) expect(p[k]).toBeCloseTo(10)
   })
 
+  const frames = (n: number) => Array.from({ length: n }, (_, i) => ({ from: `2025-0${i + 1}-01`, to: `2025-0${i + 1}-28` }))
+
   it('pone la categoría más grande al fondo y pliega el resto en «Otras»', () => {
     const rows = Array.from({ length: 12 }, (_, i) => ({ categoryId: `c${i}`, name: `c${i}`, color: '#fff', icon: 'X', values: [12 - i, 1], total: 13 - i }))
-    const l = layoutRidge({ months: ['2025-01', '2025-02'], rows, max: 12 }, { maxRows: 5 })
+    const l = layoutRidge({ bucket: 'month', frames: frames(2), rows, max: 12 }, { maxRows: 5 })
     expect(l.rows).toHaveLength(5)
     expect(l.rows[4].name).toBe('Otras (8)')
     expect(l.rows[4].values[0]).toBe(8 + 7 + 6 + 5 + 4 + 3 + 2 + 1)
     expect(l.rows[0].z).toBeLessThan(l.rows[1].z)
-    expect(Math.max(...l.rows.flatMap((r) => r.heights))).toBeCloseTo(24)
+    expect(Math.max(...l.rows.flatMap((r) => r.heights))).toBeCloseTo(22)
   })
 
-  it('con un solo mes, antepone el anterior a cero para que haya cresta', () => {
-    const one = [{ categoryId: 'a', name: 'A', color: '#000', icon: 'Tag', values: [12], total: 12 }]
-    const l = layoutRidge({ months: ['2026-01'], rows: one, max: 12 })
-    expect(l.months).toEqual(['2025-12', '2026-01'])
-    expect(l.width).toBeGreaterThan(0)
-    expect(l.rows[0].values).toEqual([0, 12])
-    expect(l.rows[0].profile.every(Number.isFinite)).toBe(true)
+  it('el ancho no depende del número de tramos: 2 meses no son una aguja ni 300 días una muralla', () => {
+    const row = (n: number) => [{ categoryId: 'a', name: 'A', color: '#000', icon: 'Tag', values: Array.from({ length: n }, (_, i) => i), total: 1 }]
+    const pocos = layoutRidge({ bucket: 'month', frames: frames(2), rows: row(2), max: 1 })
+    const dias = buildFrames('2026-10-01', '2026-10-31', 'day')
+    const muchos = layoutRidge({ bucket: 'day', frames: dias, rows: row(31), max: 30 })
+    expect(pocos.width).toBeGreaterThanOrEqual(6)
+    expect(muchos.width).toBeCloseTo(72)
+    expect(muchos.rows[0].profile.every(Number.isFinite)).toBe(true)
   })
 })
 

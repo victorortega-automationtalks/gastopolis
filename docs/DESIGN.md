@@ -63,6 +63,8 @@ Relieve mes × categoría. Clic en una celda → Ciudad filtrada a ese mes y cat
 
 **Implementación:** una cresta extruida por categoría (raíz o subcategoría), perfil con interpolación cúbica monótona (pasa por cada mes sin sobrepasarlo ni bajar de cero), la de más importe al fondo para no tapar a las demás, más de 10 se pliegan en «Otras». Rótulo de cada categoría sobre su pico, meses en el borde, cursor del mes al pasar el ratón y barras por mes en el panel.
 
+**Rediseño (tras probarla en un PC):** agrupación adaptativa por días, semanas o meses (`model/ridgeSeries.ts`; «Auto» según lo que abarquen los datos: un mes de datos se ve por días, no como una cuña de dos puntos). Ancho constante, alturas algo comprimidas en días y semanas para que el alquiler no aplaste el resto. Geometría propia (`scenes/ridge/geometry.ts`) con normales analíticas y color por altura: valles en sombra, cumbres con todo su color, y una cinta luminosa en la cresta. Sin transparencias ni z-fighting (parpadeo). La reproducción es una ola que levanta la cordillera de izquierda a derecha, con destellos en el frente; lo que aún no ha llegado queda en penumbra. Clic en una cresta abre la Ciudad con ese día, semana o mes.
+
 ### Balanza (fase 3)
 Torres de ingresos y gastos apiladas por categoría. Deslizador temporal mensual o acumulado. (El tarro de «Apartado» se quitó: estorbaba más de lo que contaba; lo ahorrado vive en Objetivos.)
 

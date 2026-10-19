@@ -48,7 +48,8 @@ function curtainMaterial(color: string): THREE.ShaderMaterial {
       varying float vH;
       #include <fog_pars_fragment>
       void main() {
-        gl_FragColor = vec4(uColor, uOpacity * pow(vH, 1.2));
+        // clamp: la interpolación puede dar vH un pelo negativo y pow(negativo) es NaN; el bloom lo extiende y la imagen sale negra.
+        gl_FragColor = vec4(uColor, uOpacity * pow(clamp(vH, 0.0, 1.0), 1.2));
         #include <colorspace_fragment>
         #include <fog_fragment>
       }`,

@@ -1,13 +1,14 @@
 import { useCallback } from 'react'
 import { useCategories } from '../../data/hooks'
 import { DRILL_PRESETS } from '../../model/hierarchy'
+import type { Frame } from '../../model/timeline'
 import type { Kind } from '../../model/types'
 import { useCity } from '../../scenes/city/store'
 import { useUI } from '../../store/ui'
 
 /**
- * Abre la Ciudad dentro de una categoría y, si se indica, limitada a un mes. Lo usan las otras escenas para que un
- * clic en un pico o en una franja lleve al detalle.
+ * Abre la Ciudad dentro de una categoría y, si se indica, limitada a un mes («aaaa-mm») o a un tramo de fechas. Lo
+ * usan las otras escenas para que un clic en un pico o en una franja lleve al detalle.
  */
 export function useOpenInCity() {
   const categories = useCategories()
@@ -16,8 +17,9 @@ export function useOpenInCity() {
   const city = useCity()
 
   return useCallback(
-    (categoryId: string, kind: Kind, month?: string) => {
-      if (month) {
+    (categoryId: string, kind: Kind, month?: string | Frame) => {
+      if (month && typeof month !== 'string') setFilters({ period: { preset: 'custom', from: month.from, to: month.to } })
+      else if (month) {
         const [y, m] = month.split('-').map(Number)
         const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
         setFilters({ period: { preset: 'custom', from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` } })
