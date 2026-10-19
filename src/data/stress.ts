@@ -18,6 +18,7 @@ export function buildStress(count = 12000, years = 8, now = new Date(2026, 9, 18
   const movements: Movement[] = []
   let seq = 0
   const push = (date: Date, categoryId: string, concept: string, amount: number) => {
+    if (date > now) return // Nada en el futuro: el mes en curso solo hasta hoy.
     const cat = categories.find((c) => c.id === categoryId)!
     movements.push({
       id: `stress-${seq++}`,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { bands, columnPath, labelEvery, linear, niceTicks } from './scale'
+import { bands, columnPath, labelEvery, linear, niceTicks, placeLabels } from './scale'
 
 /**
  * Gráficos SVG propios, en lugar de Recharts (≈95 KB comprimidos menos). Siguen las reglas de la casa: un solo eje,
@@ -140,8 +140,8 @@ export function ColumnChart({
   const plotW = Math.max(1, width - left - PAD.right)
   const y = linear(lo, hi, height - PAD.bottom, PAD.top)
   const b = bands(labels.length, plotW, Math.max(1, cols.length))
-  const shown = new Set(labelEvery(labels.length, plotW, Math.max(...labels.map(textW), 20) + 10))
   const cx = (i: number) => left + i * b.slot + b.slot / 2
+  const xLabels = placeLabels(labelEvery(labels.length, plotW, Math.max(...labels.map(textW), 20) + 10), cx, (i) => textW(labels[i]), left, width - PAD.right)
   return (
     <div>
       <Legend series={series} />
@@ -183,13 +183,11 @@ export function ColumnChart({
                   ))}
                 </g>
               ))}
-            {labels.map((l, i) =>
-              shown.has(i) ? (
-                <text key={i} x={cx(i)} y={height - 6} textAnchor="middle" className="fill-ink-faint text-[10px]">
-                  {l}
-                </text>
-              ) : null,
-            )}
+            {xLabels.map((l) => (
+              <text key={l.i} x={l.x} y={height - 6} textAnchor={l.anchor} className="fill-ink-faint text-[10px]">
+                {labels[l.i]}
+              </text>
+            ))}
             {/* Zonas de puntero: la columna entera, más grande que la barra. */}
             {labels.map((_, i) => (
               <rect key={`h${i}`} x={left + i * b.slot} y={0} width={b.slot} height={height} fill="transparent" onMouseEnter={() => setHover(i)} />
@@ -231,13 +229,12 @@ export function LineChart({
   const { ticks, lo, hi } = niceTicks(Math.min(0, ...all), Math.max(0, ...all), 5)
   const left = axisWidth(ticks, format)
   const n = labels.length
-  // Las etiquetas de los extremos van ancladas por dentro: se reserva medio rótulo a la derecha para la última.
   const lw = Math.max(...labels.map(textW), 20)
-  const plotW = Math.max(1, width - left - PAD.right - lw / 2)
+  const plotW = Math.max(1, width - left - PAD.right)
   const x = linear(0, Math.max(1, n - 1), left, left + plotW)
   const y = linear(lo, hi, height - PAD.bottom, PAD.top)
-  // La primera va anclada a la izquierda (ocupa [x, x + lw]): las que la pisarían se saltan.
-  const shown = labelEvery(n, plotW, lw + 14).filter((i) => i === 0 || x(i) - lw / 2 >= x(0) + lw + 8)
+  // Las de los extremos se arriman por dentro; las que pisarían a otra se saltan.
+  const xLabels = placeLabels(labelEvery(n, plotW, lw + 14), x, (i) => textW(labels[i]), left, width - PAD.right)
   const at = (clientX: number, rect: DOMRect) => Math.max(0, Math.min(n - 1, Math.round(((clientX - rect.left - left) / plotW) * (n - 1))))
   return (
     <div className="flex h-full flex-col">
@@ -282,9 +279,9 @@ export function LineChart({
                 ))}
               </g>
             )}
-            {shown.map((i) => (
-              <text key={i} x={x(i)} y={height - 6} textAnchor={i === 0 ? 'start' : 'middle'} className="fill-ink-faint text-[10px]">
-                {labels[i]}
+            {xLabels.map((l) => (
+              <text key={l.i} x={l.x} y={height - 6} textAnchor={l.anchor} className="fill-ink-faint text-[10px]">
+                {labels[l.i]}
               </text>
             ))}
           </svg>

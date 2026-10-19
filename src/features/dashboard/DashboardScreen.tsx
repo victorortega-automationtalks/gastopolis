@@ -17,7 +17,7 @@ import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
 import { useCategories, useCategoryMap, useGoals, useMovements, useSettings } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
 import { totals } from '../../model/aggregate'
-import { fmtDate, fmtMoney, fmtMonth, fmtPercent } from '../../model/format'
+import { fmtDate, fmtMoney, fmtMonth, fmtPercent, savingsPhrase } from '../../model/format'
 import { buildHierarchy } from '../../model/hierarchy'
 import { GOAL_STATUS_LABEL, goalProgress } from '../../model/goals'
 import { budgetStatus, dataAsOf, monthEndOf, monthProjection, noSpendStreak } from '../../model/insights'
@@ -277,7 +277,7 @@ function HeroCard({ d, month, money, locale }: { d: Data; month: string; money: 
           <div className="mt-5">
             <div className="mb-1.5 flex justify-between text-xs text-ink-muted">
               <span>Tasa de ahorro</span>
-              <span className="font-medium text-ink">{fmtPercent(Math.max(rate, 0), locale)}</span>
+              <span className={clsx('font-medium', rate < 0 ? 'text-expense' : 'text-ink')}>{fmtPercent(rate, locale)}</span>
             </div>
             <Meter ratio={Math.max(rate, 0)} label="Tasa de ahorro del mes" />
           </div>
@@ -285,7 +285,7 @@ function HeroCard({ d, month, money, locale }: { d: Data; month: string; money: 
         <div className="mt-5 border-t border-line pt-3 text-xs text-ink-muted">
           En {month.slice(0, 4)} llevas{' '}
           <b className={clsx('font-semibold', d.ytd.net >= 0 ? 'text-income' : 'text-expense')}>{money(d.ytd.net, { signed: true })}</b>
-          {d.ytd.savingsRate != null && <> · ahorras el {fmtPercent(Math.max(d.ytd.savingsRate, 0), locale)} de lo que entra</>}
+          {d.ytd.savingsRate != null && <> · {savingsPhrase(d.ytd.savingsRate, locale).toLowerCase()}</>}
         </div>
       </div>
     </Card>

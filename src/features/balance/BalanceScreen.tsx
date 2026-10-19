@@ -4,7 +4,7 @@ import { useCategories, useMovements, useSettings } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
 import { applyFilters } from '../../model/aggregate'
 import { balanceBetween, type BalanceSeg } from '../../model/balance'
-import { fmtDate, fmtMoney, fmtPercent } from '../../model/format'
+import { fmtDate, fmtMoney, savingsPhrase } from '../../model/format'
 import { today } from '../../model/period'
 import { frameIndexOf, type Frame } from '../../model/timeline'
 import { KINDS, type Movement } from '../../model/types'
@@ -92,11 +92,7 @@ export function BalanceScreen() {
               <div className="text-[11px] font-medium tracking-wider text-ink-faint uppercase">{snapshot.net >= 0 ? 'Sobra' : 'Falta'}</div>
               <div className={clsx('num font-display text-2xl font-bold', snapshot.net >= 0 ? 'text-income' : 'text-expense')}>{money(snapshot.net, true)}</div>
               <div className="text-xs text-ink-muted">
-                {snapshot.incomeTotal <= 0
-                  ? 'Sin ingresos en este periodo'
-                  : snapshot.net >= 0
-                    ? `Ahorras el ${fmtPercent(snapshot.net / snapshot.incomeTotal, settings.locale)} de lo que entra`
-                    : `Gastas un ${fmtPercent(-snapshot.net / snapshot.incomeTotal, settings.locale)} más de lo que entra`}
+                {snapshot.incomeTotal <= 0 ? 'Sin ingresos en este periodo' : savingsPhrase(snapshot.net / snapshot.incomeTotal, settings.locale)}
               </div>
             </div>
           </div>

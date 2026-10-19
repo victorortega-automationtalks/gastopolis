@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bands, columnPath, labelEvery, linear, niceTicks } from './scale'
+import { bands, columnPath, labelEvery, linear, niceTicks, placeLabels } from './scale'
 
 describe('escalas de los gráficos', () => {
   it('marcas redondas que cubren el rango e incluyen el cero', () => {
@@ -38,5 +38,17 @@ describe('escalas de los gráficos', () => {
     expect(columnPath(0, 10, 100, 40)).toMatch(/^M0,100V44Q/)
     expect(columnPath(0, 10, 100, 100)).toBe('')
     expect(columnPath(0, 10, 100, 130)).toMatch(/V126Q/)
+  })
+
+  it('etiquetas sin cortarse por los bordes ni pisarse; la última siempre', () => {
+    // 96 columnas de 3 px: la primera centrada se saldría por la izquierda.
+    const xs = (i: number) => i * 3 + 1.5
+    const w = () => 20
+    const out = placeLabels([0, 10, 20, 40, 85, 95], xs, w, 0, 288)
+    expect(out[0]).toEqual({ i: 0, x: 0, anchor: 'start' })
+    expect(out[out.length - 1]).toEqual({ i: 95, x: 288, anchor: 'end' })
+    expect(out.find((l) => l.i === 20)).toEqual({ i: 20, x: 61.5, anchor: 'middle' })
+    // 10 pisaría a la primera (arrimada al borde) y se salta; 85 pisaría a la última y cede su sitio.
+    expect(out.map((l) => l.i)).toEqual([0, 20, 40, 95])
   })
 })

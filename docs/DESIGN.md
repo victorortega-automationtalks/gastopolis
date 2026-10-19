@@ -127,4 +127,13 @@ Decisión: **ejecutable en Windows** y **web app instalada en el iPhone**. Sin A
 3. **Cordillera, Balanza, deslizador temporal, Inicio.** ✅
 4. **Alta rápida, reglas, Objetivos, Detector de fugas.** ✅
 5. **Laboratorio + Horizonte, Río, reproducción en el tiempo.** ✅
-6. **Distribución (Windows + iPhone, CI)** ✅ · **rendimiento con 10k movimientos, pulido.**
+6. **Distribución (Windows + iPhone, CI)** ✅ · **rendimiento con 10k movimientos, pulido.** ✅
+
+### Notas de la fase 6
+
+- **Banco de pruebas:** `data/stress.ts` genera 12.000 movimientos en 8 años con 900 comercios y 40 suscripciones; `model/perf.test.ts` cronometra cada cálculo de pantalla con ellos (presupuesto: 1,5 s; hoy el más lento, la jerarquía de la Ciudad, ronda los 100 ms). `PERF=1 npx vitest run src/model/perf.test.ts` imprime la tabla.
+- **Lectura de movimientos:** una sola suscripción en vivo compartida (`movementsStore` en `data/hooks.ts`) y lectura por clave primaria ordenada en memoria. Leer por un índice (`orderBy('date')`) hace que Dexie vigile cada clave por separado: con 12k filas eran ~300 ms por cambio y bloqueos de 750 ms al entrar en la Ciudad.
+- **Río:** el agua corre en un `<canvas>` encima del SVG, no con `stroke-dashoffset` animado (repintaba el SVG entero: de 7 a 36 fps en software). El brillo de los nodos es un halo, no un `drop-shadow`.
+- **Gráficos propios** (`ui/charts`) en lugar de Recharts: columnas agrupadas con línea en la misma escala y líneas con marcas. Escalas y colocación de etiquetas puras con tests. JS+CSS de 778 a 660 KB comprimidos; fuentes solo latín (de 351 a 230 KB).
+- **Pulido:** frase del ahorro única (`savingsPhrase`: «Gastas un X % más de lo que entra» si el balance es negativo); etiquetas del eje x que no se cortan por los bordes ni se pisan.
+- Lo que queda de los bloqueos al entrar en una escena 3D es crear el contexto WebGL y compilar shaders (la primera vez).

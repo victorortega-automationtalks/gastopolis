@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useCategories, useCategoryMap, useFilteredMovements, useSettings } from '../../data/hooks'
 import { deleteMovements, recategorize, restoreMovements } from '../../data/repo'
 import { totals } from '../../model/aggregate'
-import { fmtDate, fmtPercent } from '../../model/format'
+import { fmtDate, savingsPhrase } from '../../model/format'
 import type { Movement } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, CategoryChip, Money, Stat } from '../../ui/components/primitives'
@@ -83,7 +83,7 @@ export function MovementsScreen() {
         <Stat label="Gastos">
           <Money value={-t.expense} kind="expense" />
         </Stat>
-        <Stat label="Balance" sub={t.savingsRate != null ? `Ahorras el ${fmtPercent(t.savingsRate, settings.locale)} de lo que entra` : undefined}>
+        <Stat label="Balance" sub={t.savingsRate != null ? savingsPhrase(t.savingsRate, settings.locale) : undefined}>
           <Money value={t.net} kind="auto" signed />
         </Stat>
         <Stat label="Transferencias" sub={t.transfer < 0 ? 'Apartado a ahorro/inversión' : t.transfer > 0 ? 'Retirado de ahorro' : undefined}>

@@ -73,3 +73,36 @@ export function columnPath(x: number, w: number, y0: number, y1: number, r = 4):
   // Hacia abajo (valores negativos): redondeada abajo.
   return `M${x},${y0}V${y1 - rr}Q${x},${y1} ${x + rr},${y1}H${x + w - rr}Q${x + w},${y1} ${x + w},${y1 - rr}V${y0}Z`
 }
+
+/**
+ * Coloca las etiquetas del eje x sin que se corten por los bordes ni se pisen: cada una centrada en su x, salvo
+ * que no quepa (entonces se arrima al borde). Se recorren de izquierda a derecha y se salta la que pisaría a la
+ * anterior; la última siempre se queda (si pisa a la anterior, cae la anterior). Devuelve índice, x y anclaje.
+ */
+export function placeLabels(
+  candidates: number[],
+  xOf: (i: number) => number,
+  widthOf: (i: number) => number,
+  min: number,
+  max: number,
+  gap = 8,
+): { i: number; x: number; anchor: 'start' | 'middle' | 'end' }[] {
+  const box = (i: number) => {
+    const w = widthOf(i)
+    const c = xOf(i)
+    if (c - w / 2 < min) return { i, x: min, anchor: 'start' as const, a: min, b: min + w }
+    if (c + w / 2 > max) return { i, x: max, anchor: 'end' as const, a: max - w, b: max }
+    return { i, x: c, anchor: 'middle' as const, a: c - w / 2, b: c + w / 2 }
+  }
+  const out: ReturnType<typeof box>[] = []
+  for (const i of candidates) {
+    const b = box(i)
+    const prev = out[out.length - 1]
+    if (prev && b.a < prev.b + gap) {
+      if (i === candidates[candidates.length - 1]) out.pop()
+      else continue
+    }
+    out.push(b)
+  }
+  return out.map(({ i, x, anchor }) => ({ i, x, anchor }))
+}
