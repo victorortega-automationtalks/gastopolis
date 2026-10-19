@@ -4,11 +4,19 @@ import { detectTables } from '../import/detect'
 import { buildPlan, defaultTableConfig } from '../import/plan'
 import type { SheetGrid } from '../import/read'
 import { totals } from '../model/aggregate'
-import { db } from './db'
+import { db, GastopolisDB } from './db'
 import { queries } from './queries'
+import Dexie from 'dexie'
 import {
+  addContribution,
   addMovement,
   applyImport,
+  applyRulesToExisting,
+  createGoal,
+  createRule,
+  decideLeak,
+  getSettings,
+  moveRule,
   deleteCategory,
   exportBackup,
   loadSample,
@@ -155,5 +163,100 @@ describe('consultas de los hooks', () => {
     }
     const cats = await queries.categoriesInOrder()
     expect(cats.map((c) => c.order)).toEqual([...cats.map((c) => c.order)].sort((a, b) => a - b))
+  })
+})
+
+describe('reglas en el repositorio', () => {
+  it('se aplican al importar y a lo ya guardado', async () => {
+    await importOnce()
+    const cats = await db.categories.toArray()
+    const trabajo = cats.find((c) => c.name === 'Trabajo')!
+    const cryptos = cats.find((c) => c.name === 'Cryptos')!
+    // Una regla que lleva «Repsol» a Cryptos (transferencia): cambia el tipo y conserva el signo.
+    await createRule({ matchType: 'contains', pattern: 'repsol', categoryId: cryptos.id })
+    expect(await applyRulesToExisting()).toBe(2)
+    const repsol = await db.movements.filter((m) => m.concept === 'Repsol').toArray()
+    expect(repsol.every((m) => m.categoryId === cryptos.id && m.kind === 'transfer' && m.amount < 0)).toBe(true)
+    // Una regla de gasto a ingreso no se aplica.
+    await createRule({ matchType: 'equals', pattern: 'revolut', categoryId: trabajo.id })
+    expect(await applyRulesToExisting()).toBe(0)
+  })
+
+  it('el plan de importación usa las reglas y no crea categorías vacías', async () => {
+    await importOnce()
+    await resetAll()
+    await db.categories.add({ id: 'gas', name: 'Combustible', kind: 'expense', parentId: null, color: '#fff', icon: 'Fuel', order: 0 })
+    await createRule({ matchType: 'contains', pattern: 'repsol', categoryId: 'gas' })
+    const existing = { movements: [], categories: await db.categories.toArray(), rules: await db.rules.toArray() }
+    const plan = buildPlan(source, detectTables(sheet).map(defaultTableConfig), existing)
+    expect(plan.stats.ruled).toBe(2)
+    expect(plan.categories.find((c) => c.name === 'Gasolina')?.count).toBe(0)
+    const r = await applyImport(plan)
+    expect(await db.movements.where('categoryId').equals('gas').count()).toBe(2)
+    expect((await db.categories.toArray()).some((c) => c.name === 'Gasolina')).toBe(false)
+    expect(r.movements).toBe(5)
+  })
+
+  it('reordena por prioridad', async () => {
+    await db.categories.add({ id: 'a', name: 'A', kind: 'expense', parentId: null, color: '#fff', icon: 'X', order: 0 })
+    const r1 = await createRule({ matchType: 'contains', pattern: 'x', categoryId: 'a' })
+    const r2 = await createRule({ matchType: 'contains', pattern: 'y', categoryId: 'a' })
+    await moveRule(r2, -1)
+    expect((await queries.rulesByPriority()).map((r) => r.id)).toEqual([r2, r1])
+  })
+})
+
+describe('objetivos y fugas en el repositorio', () => {
+  it('una categoría de ahorro solo alimenta un objetivo', async () => {
+    const base = { icon: 'House', color: '#fff', target: 1000, initial: 0, startDate: '2025-01-01' }
+    const a = await createGoal({ ...base, name: 'Casa', linkedCategoryIds: ['ahorro'] })
+    const b = await createGoal({ ...base, name: 'Coche', linkedCategoryIds: ['ahorro', 'otro'] })
+    expect((await db.goals.get(a))?.linkedCategoryIds).toEqual([])
+    expect((await db.goals.get(b))?.linkedCategoryIds).toEqual(['ahorro', 'otro'])
+    await addContribution(b, { date: '2025-02-01', amount: 50 })
+    expect((await db.goals.get(b))?.contributions).toHaveLength(1)
+  })
+
+  it('las decisiones viajan en la copia y se borran con todo', async () => {
+    await decideLeak('fees', 'kept', 72)
+    const backup = await exportBackup()
+    expect(backup.decisions).toHaveLength(1)
+    await resetAll()
+    expect(await db.decisions.count()).toBe(0)
+    await restoreBackup(validateBackup(JSON.parse(JSON.stringify(backup))))
+    expect(await db.decisions.count()).toBe(1)
+    // Copias antiguas sin decisiones también valen.
+    const { decisions: _omit, ...old } = backup
+    void _omit
+    expect(validateBackup(old).decisions).toEqual([])
+  })
+
+  it('los ajustes guardados antes reciben los valores nuevos por defecto', async () => {
+    await db.settings.put({ id: 'settings', currency: 'USD', locale: 'es-ES', fiscalYearStart: 1, theme: 'neon', quality: 'auto' })
+    expect(await getSettings()).toMatchObject({ currency: 'USD', leakAntMax: 5, leakDupDays: 2 })
+    expect(await queries.settings()).toMatchObject({ leakAntMax: 5 })
+  })
+})
+
+describe('migración de la base de datos', () => {
+  it('una base v1 abre en v2 conservando los datos', async () => {
+    const name = 'mig-' + Math.random()
+    const v1 = new Dexie(name)
+    v1.version(1).stores({
+      movements: 'id, date, kind, categoryId, conceptKey, importBatchId',
+      categories: 'id, kind, parentId, order',
+      merchants: 'id',
+      rules: 'id, priority',
+      goals: 'id',
+      batches: 'id, importedAt',
+      settings: 'id',
+    })
+    await v1.table('categories').add({ id: 'c', name: 'C', kind: 'expense', parentId: null, color: '#fff', icon: 'X', order: 0 })
+    v1.close()
+    const v2 = new GastopolisDB(name)
+    expect(await v2.categories.count()).toBe(1)
+    await v2.decisions.add({ id: 'x', status: 'ignored', decidedAt: 0, yearlyCost: 0 })
+    expect(await v2.decisions.count()).toBe(1)
+    v2.close()
   })
 })

@@ -8,12 +8,15 @@ import type { ReactNode } from 'react'
  */
 export function Sparkline({ values, className, label }: { values: number[]; className?: string; label: string }) {
   const max = Math.max(1e-9, ...values.map(Math.abs))
+  // Al menos 12 huecos: con pocos meses de datos las barras no se estiran, se quedan a la derecha.
+  const slots = Math.max(values.length, 12)
+  const offset = slots - values.length
   return (
-    <svg viewBox={`0 0 ${values.length * 6} 24`} preserveAspectRatio="none" className={clsx('h-7 w-full', className)} role="img" aria-label={label}>
+    <svg viewBox={`0 0 ${slots * 6} 24`} preserveAspectRatio="none" className={clsx('h-7 w-full', className)} role="img" aria-label={label}>
       {values.map((v, i) => {
         const h = Math.max(1.5, (Math.abs(v) / max) * 22)
         const last = i === values.length - 1
-        return <rect key={i} x={i * 6 + 0.5} y={24 - h} width={4.5} height={h} rx={1.2} className={last ? 'fill-accent-2' : 'fill-ink-faint/45'} />
+        return <rect key={i} x={(offset + i) * 6 + 0.5} y={24 - h} width={4.5} height={h} rx={1.2} className={last ? 'fill-accent-2' : 'fill-ink-faint/45'} />
       })}
     </svg>
   )

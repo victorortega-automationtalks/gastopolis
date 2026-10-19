@@ -3,12 +3,15 @@ import { useMemo } from 'react'
 import { applyFilters } from '../model/aggregate'
 import { DEFAULT_SETTINGS } from '../model/defaults'
 import { today } from '../model/period'
-import type { Category, Movement, Settings } from '../model/types'
+import type { Category, Goal, LeakDecision, Movement, Rule, Settings } from '../model/types'
 import { useUI } from '../store/ui'
 import { queries } from './queries'
 
 const EMPTY_M: Movement[] = []
 const EMPTY_C: Category[] = []
+const EMPTY_R: Rule[] = []
+const EMPTY_G: Goal[] = []
+const EMPTY_D: LeakDecision[] = []
 
 export function useMovements(): { movements: Movement[]; loading: boolean } {
   const ms = useLiveQuery(queries.movementsByDateDesc, [])
@@ -26,6 +29,18 @@ export function useCategoryMap(): Map<string, Category> {
 
 export function useSettings(): Settings {
   return useLiveQuery(queries.settings, []) ?? DEFAULT_SETTINGS
+}
+
+export function useRules() {
+  return useLiveQuery(queries.rulesByPriority, []) ?? EMPTY_R
+}
+
+export function useGoals() {
+  return useLiveQuery(queries.goals, []) ?? EMPTY_G
+}
+
+export function useDecisions() {
+  return useLiveQuery(queries.decisions, []) ?? EMPTY_D
 }
 
 export function useBatches() {

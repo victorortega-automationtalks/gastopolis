@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { ChevronRight, FileSpreadsheet, TriangleAlert, Upload } from 'lucide-react'
 import { useMemo, useRef, useState, type DragEvent } from 'react'
-import { useCategories, useMovements } from '../../data/hooks'
+import { useCategories, useMovements, useRules } from '../../data/hooks'
 import { applyImport } from '../../data/repo'
 import { columnLetter, detectTables, headerOptions, ROLE_LABEL, ROLES, type DetectedTable, type Role } from '../../import/detect'
 import { buildPlan, defaultTableConfig, type ImportPlan, type SignMode, type TableConfig } from '../../import/plan'
@@ -19,6 +19,7 @@ export function ImportWizard() {
   const navigate = useUI((s) => s.navigate)
   const { movements } = useMovements()
   const categories = useCategories()
+  const rules = useRules()
 
   const [source, setSource] = useState<SourceFile | null>(null)
   const [tables, setTables] = useState<TableConfig[]>([])
@@ -51,8 +52,8 @@ export function ImportWizard() {
 
   // Se recalcula en cada cambio de mapeo: el usuario ve el efecto al momento.
   const plan = useMemo<ImportPlan | null>(
-    () => (source ? buildPlan(source, tables, { movements, categories }, overrides) : null),
-    [source, tables, movements, categories, overrides],
+    () => (source ? buildPlan(source, tables, { movements, categories, rules }, overrides) : null),
+    [source, tables, movements, categories, rules, overrides],
   )
 
   const commit = async () => {
@@ -79,7 +80,7 @@ export function ImportWizard() {
         {plan && (
           <>
             <b className="text-ink">{fresh}</b> nuevos · {plan.stats.duplicates} ya estaban · {plan.stats.skipped} saltados · {plan.stats.newCategories}{' '}
-            categorías nuevas
+            categorías nuevas{plan.stats.ruled > 0 && <> · {plan.stats.ruled} clasificados por tus reglas</>}
           </>
         )}
       </span>

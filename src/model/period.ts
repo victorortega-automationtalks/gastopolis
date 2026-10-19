@@ -75,6 +75,12 @@ export function resolvePeriod(p: Period, now: ISODate, fiscalYearStart = 1): { f
   }
 }
 
+/** Fecha `n` días antes (o después, con n negativo). */
+export function shiftDays(iso: ISODate, n: number): ISODate {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d - n)).toISOString().slice(0, 10)
+}
+
 export function inPeriod(date: ISODate, range: { from: ISODate; to: ISODate } | null): boolean {
   return !range || (date >= range.from && date <= range.to)
 }

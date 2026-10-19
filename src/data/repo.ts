@@ -3,12 +3,14 @@ import { newId } from '../lib/id'
 import { normalizeKey } from '../lib/text'
 import { signFor } from '../model/aggregate'
 import { DEFAULT_SETTINGS, guessIcon } from '../model/defaults'
-import type { Backup, Category, Kind, Movement, Settings } from '../model/types'
+import { previewRules } from '../model/rules'
+import type { Backup, Category, Goal, GoalContribution, Kind, LeakStatus, Movement, Rule, Settings } from '../model/types'
 import { categoryIdentity, type ImportPlan } from '../import/plan'
 import { db } from './db'
 
+/** Ajustes guardados, con los valores por defecto de los campos que se han ido añadiendo. */
 export async function getSettings(): Promise<Settings> {
-  return (await db.settings.get('settings')) ?? DEFAULT_SETTINGS
+  return { ...DEFAULT_SETTINGS, ...(await db.settings.get('settings')) }
 }
 
 export async function saveSettings(patch: Partial<Omit<Settings, 'id'>>): Promise<void> {
@@ -56,9 +58,10 @@ export async function applyImport(plan: ImportPlan): Promise<ImportResult> {
     const batchId = newId()
     const now = Date.now()
     const movements: Movement[] = []
+    const byId = new Map(existing.map((c) => [c.id, c]))
     for (const r of plan.rows) {
       if (r.duplicate) continue
-      const cat = sourceToCategory.get(r.categorySourceKey)
+      const cat = (r.ruleCategoryId && byId.get(r.ruleCategoryId)) || sourceToCategory.get(r.categorySourceKey)
       if (!cat) continue
       movements.push({
         id: newId(),
@@ -262,7 +265,7 @@ export async function deleteCategory(id: string, reassignTo: string | null): Pro
 // ── Copias de seguridad ────────────────────────────────────────────────────
 
 export async function exportBackup(): Promise<Backup> {
-  const [settings, categories, movements, merchants, rules, goals, batches] = await Promise.all([
+  const [settings, categories, movements, merchants, rules, goals, batches, decisions] = await Promise.all([
     getSettings(),
     db.categories.toArray(),
     db.movements.toArray(),
@@ -270,8 +273,9 @@ export async function exportBackup(): Promise<Backup> {
     db.rules.toArray(),
     db.goals.toArray(),
     db.batches.toArray(),
+    db.decisions.toArray(),
   ])
-  return { app: 'gastopolis', version: 1, exportedAt: new Date().toISOString(), settings, categories, movements, merchants, rules, goals, batches }
+  return { app: 'gastopolis', version: 1, exportedAt: new Date().toISOString(), settings, categories, movements, merchants, rules, goals, batches, decisions }
 }
 
 export function validateBackup(data: unknown): Backup {
@@ -282,27 +286,31 @@ export function validateBackup(data: unknown): Backup {
   const catIds = new Set(b.categories.map((c) => c.id))
   const orphan = b.movements.find((m) => !catIds.has(m.categoryId))
   if (orphan) throw new Error(`Copia corrupta: el movimiento "${orphan.concept}" apunta a una categoría que no existe`)
-  return { merchants: [], rules: [], goals: [], batches: [], settings: DEFAULT_SETTINGS, ...b } as Backup
+  return { merchants: [], rules: [], goals: [], batches: [], decisions: [], settings: DEFAULT_SETTINGS, ...b } as Backup
 }
 
 /** Sustituye todo por el contenido de la copia. */
 export async function restoreBackup(b: Backup): Promise<void> {
-  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.settings], async () => {
-    await Promise.all([db.categories.clear(), db.movements.clear(), db.merchants.clear(), db.rules.clear(), db.goals.clear(), db.batches.clear()])
+  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions, db.settings], async () => {
+    await clearAll()
     await db.categories.bulkAdd(b.categories)
     await db.movements.bulkAdd(b.movements)
     await db.merchants.bulkAdd(b.merchants)
     await db.rules.bulkAdd(b.rules)
     await db.goals.bulkAdd(b.goals)
     await db.batches.bulkAdd(b.batches)
+    await db.decisions.bulkAdd(b.decisions ?? [])
     await db.settings.put({ ...DEFAULT_SETTINGS, ...b.settings, id: 'settings' })
   })
 }
 
+function clearAll() {
+  return Promise.all([db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions].map((t) => t.clear()))
+}
+
+/** Borra todos los datos (los ajustes se conservan). */
 export async function resetAll(): Promise<void> {
-  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches], async () => {
-    await Promise.all([db.categories.clear(), db.movements.clear(), db.merchants.clear(), db.rules.clear(), db.goals.clear(), db.batches.clear()])
-  })
+  await db.transaction('rw', [db.categories, db.movements, db.merchants, db.rules, db.goals, db.batches, db.decisions], clearAll)
 }
 
 /** Añade datos de ejemplo a lo que haya (normalmente, nada). */
@@ -330,4 +338,118 @@ export function toCSV(movements: Movement[], categories: Category[]): string {
     lines.push([m.date, esc(m.concept), esc(name.get(m.categoryId) ?? ''), m.amount.toFixed(2).replace('.', ','), kind[m.kind], esc(m.notes ?? '')].join(';'))
   }
   return '﻿' + lines.join('\n')
+}
+
+// ── Reglas ─────────────────────────────────────────────────────────────────
+
+export interface RuleInput {
+  matchType: Rule['matchType']
+  pattern: string
+  categoryId: string
+}
+
+/** Crea una regla con la menor prioridad (se evalúa la última). */
+export async function createRule(input: RuleInput): Promise<string> {
+  const all = await db.rules.toArray()
+  const id = newId()
+  await db.rules.add({
+    id,
+    name: input.pattern.trim(),
+    matchType: input.matchType,
+    pattern: input.pattern.trim(),
+    set: { categoryId: input.categoryId },
+    priority: all.reduce((max, r) => Math.max(max, r.priority), -1) + 1,
+    enabled: true,
+  })
+  return id
+}
+
+export async function updateRule(id: string, patch: Partial<Pick<Rule, 'matchType' | 'pattern' | 'enabled' | 'set'>>): Promise<void> {
+  await db.rules.update(id, patch.pattern ? { ...patch, name: patch.pattern } : patch)
+}
+
+export async function deleteRule(id: string): Promise<void> {
+  await db.rules.delete(id)
+}
+
+/** Sube o baja una regla un puesto (las primeras mandan). */
+export async function moveRule(id: string, dir: -1 | 1): Promise<void> {
+  await db.transaction('rw', db.rules, async () => {
+    const rules = await db.rules.orderBy('priority').toArray()
+    const i = rules.findIndex((r) => r.id === id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= rules.length) return
+    ;[rules[i], rules[j]] = [rules[j], rules[i]]
+    await db.rules.bulkPut(rules.map((r, k) => ({ ...r, priority: k })))
+  })
+}
+
+/** Aplica las reglas a los movimientos ya guardados. Devuelve cuántos cambiaron. */
+export async function applyRulesToExisting(onlyRuleId?: string): Promise<number> {
+  return db.transaction('rw', db.rules, db.movements, db.categories, async () => {
+    const [rules, categories, movements] = await Promise.all([db.rules.toArray(), db.categories.toArray(), db.movements.toArray()])
+    const changes = previewRules(onlyRuleId ? rules.filter((r) => r.id === onlyRuleId) : rules, categories, movements)
+    const kindOf = new Map(categories.map((c) => [c.id, c.kind]))
+    await db.movements.bulkPut(
+      changes.map(({ movement: m, toCategoryId }) => {
+        const kind = kindOf.get(toCategoryId)!
+        return { ...m, categoryId: toCategoryId, kind, amount: m.kind === kind ? m.amount : signFor(kind, m.amount) }
+      }),
+    )
+    return changes.length
+  })
+}
+
+// ── Objetivos ──────────────────────────────────────────────────────────────
+
+export type GoalInput = Pick<Goal, 'name' | 'icon' | 'color' | 'target' | 'deadline' | 'initial' | 'startDate' | 'linkedCategoryIds'>
+
+/** Una categoría de ahorro solo alimenta un objetivo: al vincularla aquí se quita de los demás. */
+async function unlinkFromOthers(goalId: string, categoryIds: string[]) {
+  if (!categoryIds.length) return
+  const others = await db.goals.filter((g) => g.id !== goalId && g.linkedCategoryIds.some((c) => categoryIds.includes(c))).toArray()
+  await db.goals.bulkPut(others.map((g) => ({ ...g, linkedCategoryIds: g.linkedCategoryIds.filter((c) => !categoryIds.includes(c)) })))
+}
+
+export async function createGoal(input: GoalInput): Promise<string> {
+  return db.transaction('rw', db.goals, async () => {
+    const all = await db.goals.toArray()
+    const id = newId()
+    await unlinkFromOthers(id, input.linkedCategoryIds)
+    await db.goals.add({ ...input, id, contributions: [], priority: all.length, createdAt: Date.now() })
+    return id
+  })
+}
+
+export async function updateGoal(id: string, patch: Partial<GoalInput & Pick<Goal, 'archived'>>): Promise<void> {
+  await db.transaction('rw', db.goals, async () => {
+    if (patch.linkedCategoryIds) await unlinkFromOthers(id, patch.linkedCategoryIds)
+    await db.goals.update(id, patch)
+  })
+}
+
+export async function deleteGoal(id: string): Promise<void> {
+  await db.goals.delete(id)
+}
+
+export async function addContribution(goalId: string, c: Omit<GoalContribution, 'id'>): Promise<void> {
+  const g = await db.goals.get(goalId)
+  if (!g) throw new Error('Objetivo inexistente')
+  await db.goals.update(goalId, { contributions: [...g.contributions, { ...c, id: newId() }] })
+}
+
+export async function removeContribution(goalId: string, contributionId: string): Promise<void> {
+  const g = await db.goals.get(goalId)
+  if (!g) return
+  await db.goals.update(goalId, { contributions: g.contributions.filter((c) => c.id !== contributionId) })
+}
+
+// ── Fugas ──────────────────────────────────────────────────────────────────
+
+export async function decideLeak(id: string, status: LeakStatus, yearlyCost: number): Promise<void> {
+  await db.decisions.put({ id, status, yearlyCost, decidedAt: Date.now() })
+}
+
+export async function undecideLeak(id: string): Promise<void> {
+  await db.decisions.delete(id)
 }

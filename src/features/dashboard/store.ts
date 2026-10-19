@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-export type CardId = 'hero' | 'city' | 'kpis' | 'flow' | 'top' | 'budgets' | 'upcoming' | 'subscriptions' | 'streak'
+export type CardId = 'hero' | 'city' | 'kpis' | 'flow' | 'top' | 'goals' | 'leaks' | 'budgets' | 'upcoming' | 'subscriptions' | 'streak'
 
 export const CARD_LABEL: Record<CardId, string> = {
   hero: 'Balance del mes',
@@ -9,13 +9,15 @@ export const CARD_LABEL: Record<CardId, string> = {
   kpis: 'Indicadores',
   flow: 'Flujo mensual',
   top: 'Dónde se va el dinero',
+  goals: 'Objetivos',
+  leaks: 'Fugas',
   budgets: 'Presupuestos',
   upcoming: 'Próximos cargos',
   subscriptions: 'Suscripciones y recibos',
   streak: 'Racha y ritmo',
 }
 
-export const DEFAULT_ORDER: CardId[] = ['hero', 'city', 'kpis', 'flow', 'top', 'budgets', 'upcoming', 'subscriptions', 'streak']
+export const DEFAULT_ORDER: CardId[] = ['hero', 'city', 'kpis', 'flow', 'top', 'goals', 'leaks', 'budgets', 'upcoming', 'subscriptions', 'streak']
 
 interface DashboardPrefs {
   order: CardId[]

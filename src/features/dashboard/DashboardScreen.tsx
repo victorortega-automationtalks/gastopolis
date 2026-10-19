@@ -15,12 +15,14 @@ import {
 } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { useCategories, useCategoryMap, useMovements, useSettings } from '../../data/hooks'
+import { useCategories, useCategoryMap, useGoals, useMovements, useSettings } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
 import { totals } from '../../model/aggregate'
 import { fmtDate, fmtMoney, fmtMonth, fmtPercent } from '../../model/format'
 import { buildHierarchy } from '../../model/hierarchy'
+import { GOAL_STATUS_LABEL, goalProgress } from '../../model/goals'
 import { budgetStatus, dataAsOf, monthEndOf, monthProjection, noSpendStreak } from '../../model/insights'
+import { LEAK_ICON } from '../../model/leaks'
 import { monthKey, today } from '../../model/period'
 import { CADENCE_LABEL, detectRecurring, upcomingCharges } from '../../model/recurring'
 import { addMonths, monthlyByCategory, monthlyTotals, monthRange, monthsOf } from '../../model/series'
@@ -31,6 +33,7 @@ import { useUI } from '../../store/ui'
 import { Button, Card } from '../../ui/components/primitives'
 import { CategoryIcon } from '../../ui/icons'
 import { useOpenInCity } from '../city/openInCity'
+import { useLeaks } from '../leaks/useLeaks'
 import { Welcome } from '../onboarding/Welcome'
 import { CARD_LABEL, useDashboard, type CardId } from './store'
 import { Delta, Meter, Sparkline } from './viz'
@@ -123,6 +126,8 @@ export function DashboardScreen() {
     budgets: <BudgetsCard d={d} money={money} />,
     upcoming: <UpcomingCard d={d} money={money} />,
     subscriptions: <SubscriptionsCard d={d} money={money} />,
+    goals: <GoalsCard money={money} locale={settings.locale} asOf={asOf} />,
+    leaks: <LeaksCard money={money} />,
     streak: <StreakCard d={d} money={money} />,
   }
   // Ancho de cada tarjeta en la rejilla de 12 columnas (escritorio).
@@ -135,6 +140,8 @@ export function DashboardScreen() {
     budgets: 'lg:col-span-4',
     upcoming: 'lg:col-span-4',
     subscriptions: 'lg:col-span-4',
+    goals: 'lg:col-span-7',
+    leaks: 'lg:col-span-5',
     streak: 'lg:col-span-12',
   }
   const visible = dash.order.filter((id) => editing || !dash.hidden.includes(id))
@@ -585,6 +592,94 @@ function StreakCard({ d, money }: { d: Data; money: MoneyFn }) {
         <div className="text-2xl font-semibold">{money(d.projection.dailyAvg * 30.4)}</div>
         <div className="text-xs text-ink-muted">a ese ritmo, al mes</div>
       </div>
+    </Card>
+  )
+}
+
+function GoalsCard({ money, locale, asOf }: { money: MoneyFn; locale: string; asOf: string }) {
+  const goals = useGoals()
+  const { movements } = useMovements()
+  const navigate = useUI((s) => s.navigate)
+  const rows = useMemo(
+    () =>
+      goals
+        .filter((g) => !g.archived)
+        .sort((a, b) => a.priority - b.priority)
+        .slice(0, 4)
+        .map((g) => ({ g, p: goalProgress(g, movements, asOf) })),
+    [goals, movements, asOf],
+  )
+  return (
+    <Card className="h-full p-5">
+      <CardHead
+        title="Objetivos"
+        action={
+          <button onClick={() => navigate('objetivos')} className="text-xs font-medium text-accent-2 hover:underline">
+            {rows.length ? 'Ver todos' : 'Crear uno'}
+          </button>
+        }
+      />
+      {rows.length === 0 ? (
+        <p className="text-sm text-ink-faint">
+          Ponle meta y fecha a lo que ahorras (la entrada de la casa, un colchón, un viaje) y aquí verás si llegas a tiempo.
+        </p>
+      ) : (
+        <ul className="space-y-4">
+          {rows.map(({ g, p }) => (
+            <li key={g.id}>
+              <div className="mb-1 flex items-center gap-2 text-sm">
+                <CategoryIcon name={g.icon} size={14} className="text-ink-muted" />
+                <span className="min-w-0 flex-1 truncate">{g.name}</span>
+                <span className="font-semibold">{money(p.saved, { compact: true })}</span>
+                <span className="text-xs text-ink-faint">/ {money(g.target, { compact: true })}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full" style={{ background: withAlpha(g.color, 0.18) }}>
+                <div className="h-full rounded-full" style={{ width: `${Math.min(100, p.ratio * 100)}%`, background: g.color }} />
+              </div>
+              <div className="mt-1 text-xs text-ink-muted">
+                {fmtPercent(Math.min(p.ratio, 1), locale)} · {GOAL_STATUS_LABEL[p.status]}
+                {p.status !== 'done' && p.eta && <> · llegas en {fmtMonth(p.eta.slice(0, 7))}</>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+function LeaksCard({ money }: { money: MoneyFn }) {
+  const data = useLeaks()
+  const navigate = useUI((s) => s.navigate)
+  return (
+    <Card className="h-full p-5">
+      <CardHead
+        title="Fugas de dinero"
+        action={
+          <button onClick={() => navigate('fugas')} className="text-xs font-medium text-accent-2 hover:underline">
+            Revisar
+          </button>
+        }
+      />
+      <div className="text-3xl font-semibold">
+        {money(data.openYearly)}
+        <span className="ml-1 text-sm font-normal text-ink-muted">al año por revisar</span>
+      </div>
+      {data.openOnce > 0 && <div className="text-xs text-ink-muted">+ {money(data.openOnce)} en cargos duplicados</div>}
+      <ul className="mt-4 space-y-2">
+        {data.open.slice(0, 4).map((l) => (
+          <li key={l.id} className="flex items-center gap-2 text-sm">
+            <CategoryIcon name={LEAK_ICON[l.type]} size={14} className="shrink-0 text-ink-muted" />
+            <span className="min-w-0 flex-1 truncate">{l.title}</span>
+            <span className="shrink-0 text-xs text-ink-muted">
+              {money(l.amount)}
+              {l.period === 'year' ? '/año' : ''}
+            </span>
+          </li>
+        ))}
+        {data.open.length === 0 && <li className="text-sm text-ink-faint">Nada por revisar.</li>}
+      </ul>
+      {data.cancelYearly > 0 && <div className="mt-3 text-xs text-income">Cancelando lo marcado ahorras {money(data.cancelYearly)} al año</div>}
     </Card>
   )
 }

@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import { Menu, Plus, Search, Upload, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
+import { useCategoryMap } from '../data/hooks'
 import { KIND_LABEL_PLURAL } from '../model/defaults'
 import { KINDS, type Kind } from '../model/types'
 import { useUI, type Route } from '../store/ui'
@@ -109,6 +110,30 @@ function SearchBox() {
   )
 }
 
+/** Categorías filtradas (p. ej. al venir de una fuga): se ven y se quitan aquí. */
+function CategoryFilterChips() {
+  const ids = useUI((s) => s.filters.categoryIds)
+  const setFilters = useUI((s) => s.setFilters)
+  const catMap = useCategoryMap()
+  if (!ids.length) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {ids.map((id) => (
+        <span key={id} className="flex items-center gap-1 rounded-full border border-accent-2/40 bg-accent-2/10 py-1 pr-1 pl-2.5 text-xs">
+          {catMap.get(id)?.name ?? 'Categoría'}
+          <button
+            onClick={() => setFilters({ categoryIds: ids.filter((x) => x !== id) })}
+            className="rounded-full p-0.5 hover:bg-surface-2"
+            aria-label="Quitar filtro"
+          >
+            <X size={12} />
+          </button>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function TopBar({ onMenu }: { onMenu: () => void }) {
   const route = useUI((s) => s.route)
   const openImport = useUI((s) => s.openImport)
@@ -137,6 +162,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
           <PeriodPicker />
           {!item.scene && <KindToggles />}
           <SearchBox />
+          <CategoryFilterChips />
         </div>
       )}
     </header>
