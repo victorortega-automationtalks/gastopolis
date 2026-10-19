@@ -255,6 +255,30 @@ describe('objetivos y fugas en el repositorio', () => {
   })
 })
 
+describe('consulta de movimientos', () => {
+  it('de más reciente a más antiguo; a igual fecha, por id descendente (como el índice)', async () => {
+    await db.movements.bulkAdd(
+      [
+        ['a', '2025-01-02'],
+        ['c', '2025-03-01'],
+        ['b', '2025-01-02'],
+      ].map(([id, date]) => ({
+        id,
+        date,
+        amount: -1,
+        kind: 'expense' as const,
+        concept: id,
+        conceptKey: id,
+        categoryId: 'x',
+        tags: [],
+        source: 'manual' as const,
+        createdAt: 0,
+      })),
+    )
+    expect((await queries.movementsByDateDesc()).map((m) => m.id)).toEqual(['c', 'b', 'a'])
+  })
+})
+
 describe('migración de la base de datos', () => {
   it('una base v1 abre en v2 conservando los datos', async () => {
     const name = 'mig-' + Math.random()

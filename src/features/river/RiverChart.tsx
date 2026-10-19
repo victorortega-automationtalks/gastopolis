@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { withAlpha } from '../../lib/color'
-import { sankeyLayout } from '../../lib/sankey'
+import { sankeyLayout, type SankeyLink } from '../../lib/sankey'
 import { fmtPercent } from '../../model/format'
 import type { FlowNode, MoneyFlow } from '../../model/flow'
 import { CategoryIcon } from '../../ui/icons'
@@ -89,29 +89,19 @@ export function RiverChart({
               onMouseEnter={() => setHover({ link: i })}
             />
           ))}
-          {/* El agua: estelas de luz finas que corren por cada cinta (más en las anchas), hacia el destino. */}
-          {layout.links.flatMap((l, i) => {
-            if (l.width < 3) return []
-            const lanes = Math.min(4, Math.max(1, Math.round(l.width / 26)))
-            return Array.from({ length: lanes }, (_, k) => {
-              const off = (l.width * (k + 1)) / (lanes + 1)
-              const xm = (l.x0 + l.x1) / 2
-              return (
-                <path
-                  key={`w${i}-${k}`}
-                  d={`M${l.x0},${l.sy + off} C${xm},${l.sy + off} ${xm},${l.ty + off} ${l.x1},${l.ty + off}`}
-                  fill="none"
-                  stroke="white"
-                  strokeOpacity={isLit(i) ? 0.28 : 0.04}
-                  strokeWidth={1.4}
-                  strokeLinecap="round"
-                  strokeDasharray="22 27"
-                  className="river-flow pointer-events-none"
-                  style={{ animationDuration: `${1.6 + ((i * 7 + k * 3) % 5) * 0.25}s`, animationDelay: `${-((i + k) % 7) * 0.31}s` }}
-                />
-              )
-            })
-          })}
+          {/* Halo de cada nodo: un rectángulo más ancho y tenue detrás (un filtro drop-shadow obliga a repintar). */}
+          {layout.nodes.map((n) => (
+            <rect
+              key={`h${n.data.id}`}
+              x={n.x - 4}
+              y={n.y - 4}
+              width={n.w + 8}
+              height={Math.max(1, n.h) + 8}
+              rx={6}
+              fill={withAlpha(n.data.color, 0.22)}
+              className="pointer-events-none"
+            />
+          ))}
           {layout.nodes.map((n) => (
             <rect
               key={n.data.id}
@@ -121,12 +111,12 @@ export function RiverChart({
               height={Math.max(1, n.h)}
               rx={3}
               fill={n.data.color}
-              style={{ filter: `drop-shadow(0 0 8px ${withAlpha(n.data.color, 0.7)})` }}
               onMouseEnter={() => setHover({ node: n.data.id })}
             />
           ))}
         </svg>
       )}
+      {width > 0 && <Water links={layout.links} width={width} height={height} lit={isLit} />}
 
       {/* Rótulos en HTML: chips legibles con icono, nombre e importe. */}
       {layout.nodes.map((n) => {
@@ -184,4 +174,90 @@ export function RiverChart({
       )}
     </div>
   )
+}
+
+/**
+ * El agua: estelas de luz que corren por cada cinta hacia su destino. En un lienzo propio y no como trazos SVG
+ * animados: animar un centenar de trazos obliga a repintar todo el SVG en cada fotograma (7 fps sin GPU); aquí son
+ * unos cientos de segmentos cortos por fotograma. Con «reducir movimiento», quietas.
+ */
+function Water({
+  links,
+  width,
+  height,
+  lit,
+}: {
+  links: SankeyLink<{ source: string; target: string; value: number }>[]
+  width: number
+  height: number
+  lit: (i: number) => boolean
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const litRef = useRef(lit)
+  useEffect(() => {
+    litRef.current = lit
+  })
+  // Carriles: cada cinta ancha lleva varios, como en un río. Puntos de la curva precalculados.
+  const lanes = useMemo(() => {
+    const out: { link: number; pts: Float32Array; speed: number; phase: number }[] = []
+    links.forEach((l, i) => {
+      if (l.width < 3) return
+      const n = Math.min(4, Math.max(1, Math.round(l.width / 26)))
+      for (let k = 0; k < n; k++) {
+        const off = (l.width * (k + 1)) / (n + 1)
+        const y0 = l.sy + off
+        const y1 = l.ty + off
+        const xm = (l.x0 + l.x1) / 2
+        const steps = 48
+        const pts = new Float32Array((steps + 1) * 2)
+        for (let s = 0; s <= steps; s++) {
+          const t = s / steps
+          const u = 1 - t
+          // Bézier cúbica (x0,y0) (xm,y0) (xm,y1) (x1,y1).
+          pts[s * 2] = u * u * u * l.x0 + 3 * u * u * t * xm + 3 * u * t * t * xm + t * t * t * l.x1
+          pts[s * 2 + 1] = u * u * u * y0 + 3 * u * u * t * y0 + 3 * u * t * t * y1 + t * t * t * y1
+        }
+        out.push({ link: i, pts, speed: 0.16 + ((i * 7 + k * 3) % 5) * 0.03, phase: ((i * 13 + k * 7) % 17) / 17 })
+      }
+    })
+    return out
+  }, [links])
+
+  useEffect(() => {
+    const c = canvas.current
+    const ctx = c?.getContext('2d')
+    if (!c || !ctx) return
+    const dpr = Math.min(2, window.devicePixelRatio || 1)
+    c.width = Math.round(width * dpr)
+    c.height = Math.round(height * dpr)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.lineCap = 'round'
+    ctx.lineWidth = 1.4
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+    let raf = 0
+    const DASH = 0.12
+    const draw = (now: number) => {
+      ctx.clearRect(0, 0, width, height)
+      for (const lane of lanes) {
+        ctx.strokeStyle = litRef.current(lane.link) ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.05)'
+        const steps = lane.pts.length / 2 - 1
+        // Dos estelas por carril, separadas medio recorrido.
+        for (const extra of [0, 0.5]) {
+          const head = (lane.phase + extra + (reduce ? 0 : (now / 1000) * lane.speed)) % 1
+          const from = Math.max(0, Math.floor((head - DASH) * steps))
+          const to = Math.min(steps, Math.ceil(head * steps))
+          if (to <= from) continue
+          ctx.beginPath()
+          ctx.moveTo(lane.pts[from * 2], lane.pts[from * 2 + 1])
+          for (let s = from + 1; s <= to; s++) ctx.lineTo(lane.pts[s * 2], lane.pts[s * 2 + 1])
+          ctx.stroke()
+        }
+      }
+      if (!reduce) raf = requestAnimationFrame(draw)
+    }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [lanes, width, height])
+
+  return <canvas ref={canvas} style={{ width, height }} className="pointer-events-none absolute inset-0" aria-hidden />
 }

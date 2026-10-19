@@ -94,11 +94,19 @@ export function hexToOklch(hex: string): [number, number, number] {
  * Colores para los hijos de un mismo bloque (los conceptos de una categoría): el primero es el del padre y los
  * demás giran el tono por el ángulo áureo, alternando tres luminosidades, para que vecinos se distingan bien.
  */
+const familyCache = new Map<string, string>()
 export function familyColor(base: string, i: number): string {
   if (i === 0) return base
+  // Con miles de hermanos (movimientos de un concepto) se repiten los mismos cálculos: se guardan.
+  const key = `${base}|${i}`
+  const hit = familyCache.get(key)
+  if (hit) return hit
   const [, , h] = hexToOklch(base)
   const L = [0.7, 0.6, 0.79][i % 3]
-  return oklchToHex(L, 0.15, (h + i * 137.508) % 360)
+  const out = oklchToHex(L, 0.15, (h + i * 137.508) % 360)
+  if (familyCache.size > 20000) familyCache.clear()
+  familyCache.set(key, out)
+  return out
 }
 
 /** Rampa secuencial de un solo tono (brasa): 0 apagado → 1 incandescente. Sobre fondo oscuro, más valor = más luz. */

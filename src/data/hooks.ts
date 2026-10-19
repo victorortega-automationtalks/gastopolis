@@ -1,5 +1,6 @@
+import { liveQuery } from 'dexie'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useMemo } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { applyFilters } from '../model/aggregate'
 import { DEFAULT_SETTINGS } from '../model/defaults'
 import { today } from '../model/period'
@@ -13,8 +14,37 @@ const EMPTY_R: Rule[] = []
 const EMPTY_G: Goal[] = []
 const EMPTY_D: LeakDecision[] = []
 
+/**
+ * Movimientos: una sola suscripción para toda la app, que se abre con el primer uso y se queda. Antes cada componente
+ * abría la suya y cada cambio de pantalla volvía a leer toda la tabla.
+ */
+const movementsStore = (() => {
+  let value: Movement[] | undefined
+  let started = false
+  const listeners = new Set<() => void>()
+  const start = () => {
+    if (started) return
+    started = true
+    liveQuery(queries.movementsByDateDesc).subscribe({
+      next: (v) => {
+        value = v
+        listeners.forEach((l) => l())
+      },
+      error: (e) => console.error(e),
+    })
+  }
+  return {
+    subscribe: (l: () => void) => {
+      start()
+      listeners.add(l)
+      return () => listeners.delete(l)
+    },
+    get: () => value,
+  }
+})()
+
 export function useMovements(): { movements: Movement[]; loading: boolean } {
-  const ms = useLiveQuery(queries.movementsByDateDesc, [])
+  const ms = useSyncExternalStore(movementsStore.subscribe, movementsStore.get)
   return { movements: ms ?? EMPTY_M, loading: ms === undefined }
 }
 
