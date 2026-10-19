@@ -894,7 +894,7 @@ dependencies = [
 
 [[package]]
 name = "gastopolis"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "tauri",
  "tauri-build",
