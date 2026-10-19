@@ -65,7 +65,14 @@ fn request(call: BankCall) -> Result<BankResponse, String> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
     let token = format!("Bearer {}", sign_jwt(&call.app_id, &call.key_pem, now)?);
     let agent: ureq::Agent = ureq::Agent::config_builder()
-        .tls_config(ureq::tls::TlsConfig::builder().provider(ureq::tls::TlsProvider::NativeTls).build())
+        .tls_config(
+            // Los certificados del sistema (en Windows, los de Schannel). Con la lista propia de ureq, Schannel rechaza la
+            // conexión: «unable to find any user-specified roots in the final cert chain».
+            ureq::tls::TlsConfig::builder()
+                .provider(ureq::tls::TlsProvider::NativeTls)
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
         .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(60)))
         .build()
