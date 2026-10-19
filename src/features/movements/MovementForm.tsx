@@ -1,7 +1,7 @@
 import { shownDate } from '../../model/payday'
 import clsx from 'clsx'
 import { Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useAccounts, useCategories, useMovements, useRules } from '../../data/hooks'
 import { addMovement, deleteMovements, restoreMovements, updateMovement } from '../../data/repo'
 import { parseAmount } from '../../import/values'
@@ -14,6 +14,7 @@ import { useUI } from '../../store/ui'
 import { Button, Field, Modal, Segmented } from '../../ui/components/primitives'
 import { CategoryIcon } from '../../ui/icons'
 import { offerRule } from '../categories/offerRule'
+import { CategorySelect } from '../categories/CategorySelect'
 import { categoryLabel } from '../categories/tree'
 
 const FORM_ID = 'movement-form'
@@ -49,6 +50,11 @@ export function MovementForm() {
           <Button variant="ghost" onClick={close}>
             Cancelar
           </Button>
+          {!current && (
+            <Button type="submit" form={FORM_ID} name="another" title="Guarda y deja el formulario listo para el siguiente">
+              Guardar y otro
+            </Button>
+          )}
           <Button variant="primary" type="submit" form={FORM_ID}>
             Guardar
           </Button>
@@ -103,11 +109,24 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
     return [...seen.values()].sort((a, b) => b.n - a.n).slice(0, 8)
   }, [movements, kind, current])
 
-  const save = async () => {
+  // Las categorías que más usas para este tipo: las primeras a mano; el resto, en «Otra categoría…».
+  const topCategories = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const m of movements) if (m.kind === kind) n.set(m.categoryId, (n.get(m.categoryId) ?? 0) + 1)
+    const ranked = ofKind.filter((c) => n.has(c.id)).sort((a, b) => (n.get(b.id) ?? 0) - (n.get(a.id) ?? 0))
+    const rest = ofKind.filter((c) => !n.has(c.id))
+    return [...ranked, ...rest].slice(0, 8)
+  }, [movements, kind, ofKind])
+  const chosen = categories.find((c) => c.id === categoryId)
+  const [showNotes, setShowNotes] = useState(Boolean(current?.notes))
+  const yesterday = new Date(Date.parse(today()) - 86_400_000).toISOString().slice(0, 10)
+  const amountRef = useRef<HTMLInputElement>(null)
+
+  const save = async (another: boolean) => {
     const n = parseAmount(amount)
     if (!n) return setError('Pon un importe distinto de cero')
-    if (!categoryId || !ofKind.some((c) => c.id === categoryId)) return setError('Elige una categoría')
     if (!concept.trim()) return setError('Escribe un concepto')
+    if (!categoryId || !ofKind.some((c) => c.id === categoryId)) return setError('Elige una categoría')
     // En transferencias el signo lo decide quien escribe; en el resto, la categoría.
     const input = { date, amount: kind === 'transfer' ? n : Math.abs(n), concept, categoryId, notes, accountId: accountId || undefined }
     if (!accountOf?.bank) rememberAccount(accountId)
@@ -120,11 +139,25 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
       const message = current ? 'Movimiento actualizado' : 'Movimiento añadido'
       if (recategorized && cat && !compiled.categoryFor(concept, kind, kind === 'income' ? 1 : -1)) offerRule(toast, concept.trim(), cat.id, cat.name, message)
       else toast(message)
-      onDone()
+      if (!another) return onDone()
+      // «Guardar y otro»: se queda el tipo, la fecha y la cuenta; lo demás, en blanco y el cursor en el importe.
+      setAmount('')
+      setConcept('')
+      setPickedCategory('')
+      setNotes('')
+      setShowNotes(false)
+      setError(null)
+      amountRef.current?.focus()
     } catch (e) {
       setError((e as Error).message)
     }
   }
+
+  const chip = (on: boolean) =>
+    clsx(
+      'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition',
+      on ? 'border-accent-2 bg-accent-2/10 text-ink' : 'border-line text-ink-muted hover:text-ink',
+    )
 
   return (
     <form
@@ -132,7 +165,8 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault()
-        void save()
+        const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
+        void save(submitter?.name === 'another')
       }}
     >
       <Segmented<Kind>
@@ -144,24 +178,30 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
         options={KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
         className="w-full [&>button]:flex-1"
       />
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Importe">
-          <input
-            autoFocus
-            inputMode="decimal"
-            className={clsx('field num h-12 text-xl', kind === 'expense' ? 'text-expense' : kind === 'income' ? 'text-income' : 'text-transfer')}
-            placeholder="0,00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </Field>
-        <Field label="Fecha">
-          <input type="date" className="field h-12" value={date} onChange={(e) => setDate(e.target.value)} required />
-        </Field>
-      </div>
+
+      <Field label="Importe">
+        <input
+          ref={amountRef}
+          autoFocus
+          inputMode="decimal"
+          className={clsx('field num h-14 text-3xl', kind === 'expense' ? 'text-expense' : kind === 'income' ? 'text-income' : 'text-transfer')}
+          placeholder="0,00 €"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+      </Field>
+
+      <Field label="Concepto" hint={recents.length > 0 ? undefined : 'Lo que pone el ticket: Mercadona, gasolina, cena con…'}>
+        <input className="field" list="concepts" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="¿En qué ha sido?" />
+        <datalist id="concepts">
+          {conceptOptions.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      </Field>
       {recents.length > 0 && (
-        <div className="-mb-1 flex flex-wrap gap-1.5" aria-label="Recientes">
-          {recents.map((r) => (
+        <div className="-mt-2 flex flex-wrap gap-1.5" aria-label="Recientes">
+          {recents.slice(0, 6).map((r) => (
             <button
               type="button"
               key={r.concept}
@@ -169,35 +209,32 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
                 setConcept(r.concept)
                 setPickedCategory(r.categoryId)
               }}
-              className={clsx(
-                'rounded-full border px-2.5 py-1 text-xs transition',
-                normalizeKey(concept) === normalizeKey(r.concept) ? 'border-accent-2 bg-accent-2/10 text-ink' : 'border-line text-ink-muted hover:text-ink',
-              )}
+              className={chip(normalizeKey(concept) === normalizeKey(r.concept))}
             >
               {r.concept}
             </button>
           ))}
         </div>
       )}
-      <Field label="Concepto">
-        <input className="field" list="concepts" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="Mercadona, Spotify, Nómina…" />
-        <datalist id="concepts">
-          {conceptOptions.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-      </Field>
-      <Field group label="Categoría" hint={ofKind.length === 0 ? 'No hay categorías de este tipo: créalas en Categorías.' : undefined}>
-        <div className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
-          {ofKind.map((c) => (
+
+      <Field
+        group
+        label="Categoría"
+        hint={chosen && !pickedCategory && suggested ? `Propuesta por el concepto: ${chosen.name}. Pulsa otra para cambiarla.` : undefined}
+      >
+        <div className="flex flex-wrap gap-1.5">
+          {chosen && !topCategories.some((c) => c.id === chosen.id) && (
+            <span className={chip(true)} style={{ borderColor: chosen.color, background: chosen.color + '26' }}>
+              <CategoryIcon name={chosen.icon} size={13} className="shrink-0" />
+              {categoryLabel(chosen, categories)}
+            </span>
+          )}
+          {topCategories.map((c) => (
             <button
               type="button"
               key={c.id}
               onClick={() => setPickedCategory(c.id)}
-              className={clsx(
-                'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition',
-                c.id === categoryId ? 'text-ink' : 'border-line text-ink-muted hover:text-ink',
-              )}
+              className={chip(c.id === categoryId)}
               style={c.id === categoryId ? { borderColor: c.color, background: c.color + '26' } : undefined}
             >
               <CategoryIcon name={c.icon} size={13} className="shrink-0" />
@@ -205,32 +242,63 @@ function FormBody({ current, movements, onDone }: { current?: Movement; movement
             </button>
           ))}
         </div>
+        <CategorySelect className="mt-2" value="" onChange={setPickedCategory} kinds={[kind]} placeholder="Otra categoría…" aria-label="Otra categoría" />
       </Field>
       {kind === 'transfer' && (
         <p className="text-xs text-ink-muted">En transferencias, un importe negativo aparta dinero (a ahorro o inversión) y uno positivo lo trae de vuelta.</p>
       )}
+
+      <Field group label="Fecha">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button type="button" className={chip(date === today())} onClick={() => setDate(today())}>
+            Hoy
+          </button>
+          <button type="button" className={chip(date === yesterday)} onClick={() => setDate(yesterday)}>
+            Ayer
+          </button>
+          <input
+            type="date"
+            className="field h-8 w-auto py-0 text-xs"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+            aria-label="Otra fecha"
+          />
+        </div>
+      </Field>
+
       {accounts.length > 0 &&
         (accountOf?.bank ? (
           <p className="text-xs text-ink-muted">
             Viene de <b className="text-ink">{accountOf.name}</b> (sincronizado con el banco).
           </p>
         ) : (
-          <Field label="Cuenta" hint="Efectivo, una cuenta que no está conectada… Los bancos conectados traen sus movimientos solos.">
-            <select className="field" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              <option value="">Sin cuenta</option>
+          <Field group label="Cuenta" hint="Los bancos conectados traen sus movimientos solos: aquí, efectivo y lo que no llega del banco.">
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className={chip(!accountId)} onClick={() => setAccountId('')}>
+                Sin cuenta
+              </button>
               {accounts
                 .filter((a) => !a.bank && !a.archived)
                 .map((a) => (
-                  <option key={a.id} value={a.id}>
+                  <button type="button" key={a.id} className={chip(accountId === a.id)} onClick={() => setAccountId(a.id)}>
+                    <span className="h-2 w-2 rounded-full" style={{ background: a.color }} />
                     {a.name}
-                  </option>
+                  </button>
                 ))}
-            </select>
+            </div>
           </Field>
         ))}
-      <Field label="Notas">
-        <textarea className="field min-h-16" value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </Field>
+
+      {showNotes ? (
+        <Field label="Nota">
+          <textarea className="field min-h-16" value={notes} onChange={(e) => setNotes(e.target.value)} autoFocus={!current} />
+        </Field>
+      ) : (
+        <button type="button" className="text-xs font-medium text-accent-2 hover:underline" onClick={() => setShowNotes(true)}>
+          ＋ Añadir una nota
+        </button>
+      )}
       {error && <p className="text-sm text-danger">{error}</p>}
     </form>
   )

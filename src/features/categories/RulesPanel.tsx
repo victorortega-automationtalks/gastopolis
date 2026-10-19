@@ -8,7 +8,7 @@ import type { Rule } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, CategoryChip } from '../../ui/components/primitives'
 import { RuleSuggestions } from './RuleSuggestions'
-import { categoryLabel } from './tree'
+import { CategorySelect } from './CategorySelect'
 
 const MATCH_TYPES: Rule['matchType'][] = ['contains', 'equals', 'regex']
 
@@ -71,14 +71,7 @@ export function RulesPanel() {
             onChange={(e) => setPattern(e.target.value)}
             aria-label="Texto"
           />
-          <select className="field" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} aria-label="Categoría">
-            <option value="">→ Categoría…</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {categoryLabel(c, categories)}
-              </option>
-            ))}
-          </select>
+          <CategorySelect value={categoryId} onChange={setCategoryId} placeholder="→ Categoría…" aria-label="Categoría" />
           <Button type="submit" variant="primary" disabled={!pattern.trim() || !categoryId || invalid}>
             <Plus size={15} /> Añadir
           </Button>

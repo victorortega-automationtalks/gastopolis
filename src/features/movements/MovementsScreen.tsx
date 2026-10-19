@@ -1,25 +1,24 @@
 import { shownDate } from '../../model/payday'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import clsx from 'clsx'
-import { ArrowDown, ArrowUp, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, FileSpreadsheet, Landmark, PenLine, Sparkles, Trash2, X } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
-import { useAccounts, useCategories, useCategoryMap, useFilteredMovements, useSettings } from '../../data/hooks'
+import { useAccounts, useCategoryMap, useFilteredMovements, useSettings } from '../../data/hooks'
 import { deleteMovements, recategorize, restoreMovements } from '../../data/repo'
 import { totals } from '../../model/aggregate'
 import { fmtDate, fmtMonth, savingsPhrase } from '../../model/format'
-import { NO_ACCOUNT } from '../../model/period'
+import { NEW_DAYS, NO_ACCOUNT, type Origin } from '../../model/period'
 import type { Movement } from '../../model/types'
 import { useUI } from '../../store/ui'
 import { Button, Card, CategoryChip, Money, Stat } from '../../ui/components/primitives'
 import { offerRule } from '../categories/offerRule'
-import { categoryLabel } from '../categories/tree'
+import { CategorySelect } from '../categories/CategorySelect'
 import { Welcome } from '../onboarding/Welcome'
 
 type SortKey = 'date' | 'concept' | 'category' | 'amount'
 
 export function MovementsScreen() {
   const { all, filtered } = useFilteredMovements()
-  const categories = useCategories()
   const catMap = useCategoryMap()
   const settings = useSettings()
   const editMovement = useUI((s) => s.editMovement)
@@ -94,6 +93,7 @@ export function MovementsScreen() {
       </Card>
 
       <AccountFilter />
+      <OriginFilter all={all} />
 
       {selected.size > 0 && (
         <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-surface-solid px-3 py-2 shadow-lg">
@@ -103,14 +103,13 @@ export function MovementsScreen() {
           <span className="text-sm">
             {selected.size} seleccionados · <Money value={selTotal} kind="auto" />
           </span>
-          <select className="field ml-auto h-8 w-56 py-0 text-xs" value="" onChange={(e) => e.target.value && void bulkRecategorize(e.target.value)}>
-            <option value="">Mover a categoría…</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {categoryLabel(c, categories)}
-              </option>
-            ))}
-          </select>
+          <CategorySelect
+            className="ml-auto w-56"
+            value=""
+            onChange={(id) => void bulkRecategorize(id)}
+            placeholder="Mover a categoría…"
+            aria-label="Mover a categoría"
+          />
           <Button size="sm" variant="danger" onClick={bulkDelete}>
             <Trash2 size={14} /> Borrar
           </Button>
@@ -146,6 +145,7 @@ function MovementTable({
 }) {
   const catMap = useCategoryMap()
   const parent = useRef<HTMLDivElement>(null)
+  const [freshSince] = useState(() => Date.now() - NEW_DAYS * 86_400_000)
   const v = useVirtualizer({ count: rows.length, getScrollElement: () => parent.current, estimateSize: () => 52, overscan: 12 })
 
   const Head = ({ k, children, className }: { k: SortKey; children: string; className?: string }) => (
@@ -206,7 +206,13 @@ function MovementTable({
                   </span>
                 )}
                 <span className="min-w-0">
-                  <span className="block truncate">{m.concept}</span>
+                  <span className="flex items-center gap-1.5">
+                    <OriginIcon m={m} />
+                    <span className="truncate">{m.concept}</span>
+                    {m.source === 'bank' && m.createdAt >= freshSince && (
+                      <span className="shrink-0 rounded-full bg-accent-2/15 px-1.5 text-[10px] font-semibold text-accent-2 uppercase">nuevo</span>
+                    )}
+                  </span>
                   <span className="block truncate text-xs text-ink-faint sm:hidden">{cat?.name}</span>
                   {m.notes && <span className="hidden truncate text-xs text-ink-faint sm:block">{m.notes}</span>}
                 </span>
@@ -220,6 +226,63 @@ function MovementTable({
         </div>
       </div>
     </Card>
+  )
+}
+
+const ORIGIN_ICON = { bank: Landmark, manual: PenLine, import: FileSpreadsheet, sample: FileSpreadsheet } as const
+const ORIGIN_TITLE = { bank: 'Del banco', manual: 'Apuntado a mano', import: 'Importado', sample: 'Ejemplo' } as const
+
+/** De dónde viene cada movimiento, de un vistazo: banco, a mano o importado. */
+function OriginIcon({ m }: { m: Movement }) {
+  const Icon = ORIGIN_ICON[m.source]
+  return (
+    <span title={ORIGIN_TITLE[m.source]} className="shrink-0 text-ink-faint">
+      <Icon size={13} />
+    </span>
+  )
+}
+
+/** Filtro por origen: lo nuevo que ha traído el banco, lo del banco, lo apuntado a mano o lo importado. */
+function OriginFilter({ all }: { all: Movement[] }) {
+  const origin = useUI((s) => s.filters.origin) ?? 'all'
+  const setFilters = useUI((s) => s.setFilters)
+  const [since] = useState(() => Date.now() - NEW_DAYS * 86_400_000)
+  const counts = useMemo(() => {
+    const c = { bank: 0, manual: 0, import: 0, new: 0 }
+    for (const m of all) {
+      if (m.source === 'bank') {
+        c.bank++
+        if (m.createdAt >= since) c.new++
+      } else if (m.source === 'manual') c.manual++
+      else c.import++
+    }
+    return c
+  }, [all, since])
+  if (!counts.bank && !counts.manual) return null
+  const chip = (value: Origin, label: string, n?: number, Icon?: typeof Landmark) => (
+    <button
+      key={value}
+      onClick={() => setFilters({ origin: value })}
+      aria-pressed={origin === value}
+      className={clsx(
+        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition',
+        origin === value ? 'border-accent-2 bg-accent-2/10 text-ink' : 'border-line text-ink-muted hover:text-ink',
+      )}
+    >
+      {Icon && <Icon size={12} />}
+      {label}
+      {n !== undefined && <span className="num text-ink-faint">{n}</span>}
+    </button>
+  )
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por origen">
+      <span className="mr-1 text-xs text-ink-faint">Origen</span>
+      {chip('all', 'Todo')}
+      {counts.new > 0 && chip('new', 'Nuevo del banco', counts.new, Sparkles)}
+      {counts.bank > 0 && chip('bank', 'Banco', counts.bank, Landmark)}
+      {counts.manual > 0 && chip('manual', 'A mano', counts.manual, PenLine)}
+      {counts.import > 0 && chip('import', 'Importado', counts.import, FileSpreadsheet)}
+    </div>
   )
 }
 

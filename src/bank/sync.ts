@@ -25,9 +25,27 @@ export const MIN_AUTO_HOURS = 6
  * Qué rango pedir. Si ya hay movimientos traídos hasta un día, solo desde unos días antes de ese día: con seis meses
  * ya en casa no se vuelve a pedir todo, solo lo último.
  */
-export function fetchRange(link: Pick<BankLink, 'syncedThrough'>, today: ISODate): { dateFrom: ISODate; dateTo: ISODate } {
+export function fetchRange(link: Pick<BankLink, 'syncedThrough' | 'syncFrom'>, today: ISODate): { dateFrom: ISODate; dateTo: ISODate } {
   const from = link.syncedThrough ? toMs(link.syncedThrough) - OVERLAP_DAYS * DAY : toMs(today) - FIRST_SYNC_DAYS * DAY
-  return { dateFrom: iso(Math.min(from, toMs(today))), dateTo: today }
+  // Nunca antes de «traer desde» (lo anterior ya lo tienes, importado o apuntado).
+  const floor = link.syncFrom ? toMs(link.syncFrom) : -Infinity
+  return { dateFrom: iso(Math.min(Math.max(from, floor), toMs(today))), dateTo: today }
+}
+
+/**
+ * Desde qué día conviene traer del banco: el siguiente al último movimiento que ya tienes importado o apuntado a mano
+ * (si no hay ninguno, todo lo que dé el banco). Así el Excel y el banco no se pisan.
+ */
+export function suggestSyncFrom(movements: Pick<Movement, 'date' | 'source' | 'accountId'>[], accountIds: string[] = []): ISODate | undefined {
+  const mine = new Set(accountIds)
+  let last = ''
+  for (const m of movements) {
+    if (m.source === 'bank' || m.source === 'sample') continue
+    // Lo apuntado en otra cuenta (efectivo, otra) no cuenta: solo lo que podría ser de este banco.
+    if (m.accountId && !mine.has(m.accountId)) continue
+    if (m.date > last) last = m.date
+  }
+  return last ? iso(toMs(last) + DAY) : undefined
 }
 
 /** Le toca sincronizarse sola: permiso vigente y han pasado las horas configuradas (6 como mínimo). */

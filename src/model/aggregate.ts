@@ -1,5 +1,5 @@
 import { normalizeKey } from '../lib/text'
-import { inPeriod, NO_ACCOUNT, resolvePeriod, type Filters } from './period'
+import { inPeriod, NEW_DAYS, NO_ACCOUNT, resolvePeriod, type Filters } from './period'
 import type { Category, ISODate, Kind, Movement } from './types'
 
 /** Ids de una categoría y todas sus descendientes. */
@@ -29,12 +29,21 @@ export function applyFilters(movements: Movement[], filters: Filters, categories
   const q = normalizeKey(filters.search)
   const catName = q ? new Map(categories.map((c) => [c.id, normalizeKey(c.name)])) : null
   const accounts = filters.accountIds?.length ? new Set(filters.accountIds) : null
+  const origin = filters.origin ?? 'all'
+  const fresh = Date.parse(now) - NEW_DAYS * 86_400_000
+  const fromOrigin = (m: Movement) =>
+    origin === 'all' ||
+    (origin === 'bank' && m.source === 'bank') ||
+    (origin === 'manual' && m.source === 'manual') ||
+    (origin === 'import' && (m.source === 'import' || m.source === 'sample')) ||
+    (origin === 'new' && m.source === 'bank' && m.createdAt >= fresh)
   return movements.filter(
     (m) =>
       kinds.has(m.kind) &&
       inPeriod(m.date, range) &&
       (!cats || cats.has(m.categoryId)) &&
       (!accounts || accounts.has(m.accountId ?? NO_ACCOUNT)) &&
+      fromOrigin(m) &&
       (!q || m.conceptKey.includes(q) || catName!.get(m.categoryId)?.includes(q) || (m.notes && normalizeKey(m.notes).includes(q))),
   )
 }

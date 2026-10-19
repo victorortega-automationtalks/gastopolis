@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDeck, cardOptions, cardPoints, groupKey } from './sortGame'
+import { buildDeck, cardOptions, cardPoints, cardQuip, cheer, groupKey, levelFor, longDate } from './sortGame'
 
 const cats = [
   { id: 'sin', name: 'Sin clasificar', kind: 'expense' as const },
@@ -64,5 +64,40 @@ describe('el Clasificador', () => {
     expect(cardPoints(1, 0)).toBe(15)
     expect(cardPoints(4, 4)).toBe(60)
     expect(cardPoints(100, 100)).toBe(330)
+  })
+})
+
+describe('el Clasificador, versión divertida', () => {
+  const card = (p: Partial<import('./sortGame').SortCard>) => ({
+    key: 'x',
+    kind: 'expense' as const,
+    ids: ['a'],
+    total: -10,
+    from: '2026-10-14',
+    to: '2026-10-14',
+    ...p,
+  })
+
+  it('fecha larga con el día de la semana', () => {
+    expect(longDate('2026-10-17')).toBe('sábado 17 de octubre de 2026')
+    expect(longDate('2026-01-05')).toBe('lunes 5 de enero de 2026')
+  })
+
+  it('chascarrillo según lo que es, y si no según cómo es; siempre el mismo para la misma carta', () => {
+    expect(cardQuip(card({}), 'betting')).toMatch(/casa|Apuesta|quiniela/)
+    expect(cardQuip(card({ ids: Array.from({ length: 25 }, (_, i) => String(i)) }))).toMatch(/^25 veces/)
+    expect(cardQuip(card({ total: -900 }))).toMatch(/tres cifras/)
+    expect(cardQuip(card({ total: -1.2 }))).toMatch(/Calderilla/)
+    expect(cardQuip(card({ from: '2026-10-17', to: '2026-10-17' }))).toMatch(/fin de semana/)
+    expect(cardQuip(card({ key: 'mercadona' }), 'supermarket')).toBe(cardQuip(card({ key: 'mercadona' }), 'supermarket'))
+  })
+
+  it('niveles por puntos y celebraciones de racha', () => {
+    expect(levelFor(0)).toMatchObject({ index: 0, name: 'Novato del recibo', next: 150, progress: 0 })
+    expect(levelFor(600)).toMatchObject({ index: 2, name: 'Cazador de tickets' })
+    expect(levelFor(99999)).toMatchObject({ name: 'Leyenda de Gastópolis', progress: 1 })
+    expect(cheer(5, 'k')).toEqual({ text: '¡Combo ×5!', big: true })
+    expect(cheer(20, 'k').big).toBe(true)
+    expect(cheer(2, 'k').big).toBe(false)
   })
 })

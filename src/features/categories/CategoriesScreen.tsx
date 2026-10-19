@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useCategories, useMovements, useRules, useSettings } from '../../data/hooks'
 import { createCategory, deleteCategory, setCategoryKind, updateCategory } from '../../data/repo'
@@ -29,6 +29,8 @@ function CategoriesList() {
   const [kind, setKind] = useState<Kind>('expense')
   const [newName, setNewName] = useState('')
   const [deleting, setDeleting] = useState<Category | null>(null)
+  // Agrupar, cambiar de tipo y borrar quedan a mano pero escondidos: lo normal es renombrar y poner presupuesto.
+  const [editing, setEditing] = useState(false)
 
   const stats = useMemo(() => {
     const out = new Map<string, CatStats>()
@@ -64,7 +66,7 @@ function CategoriesList() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <Segmented<Kind>
           value={kind}
@@ -78,6 +80,9 @@ function CategoriesList() {
             ),
           }))}
         />
+        <Button size="sm" variant={editing ? 'primary' : 'ghost'} onClick={() => setEditing(!editing)} title="Agrupar, cambiar de tipo o borrar categorías">
+          <Pencil size={14} /> {editing ? 'Listo' : 'Organizar'}
+        </Button>
         <form
           className="ml-auto flex w-full gap-2 sm:w-auto"
           onSubmit={(e) => {
@@ -113,6 +118,7 @@ function CategoriesList() {
             depth={depth}
             all={categories}
             stats={stats.get(c.id)}
+            editing={editing}
             onChange={(patch) => run(() => updateCategory(c.id, patch))}
             onKind={(k) => run(() => setCategoryKind(c.id, k))}
             onDelete={() => setDeleting(c)}
@@ -144,6 +150,7 @@ function CategoryRow({
   depth,
   all,
   stats,
+  editing,
   onChange,
   onKind,
   onDelete,
@@ -152,6 +159,7 @@ function CategoryRow({
   depth: number
   all: Category[]
   stats?: CatStats
+  editing: boolean
   onChange: (patch: Partial<Category>) => void
   onKind: (k: Kind) => void
   onDelete: () => void
@@ -235,20 +243,22 @@ function CategoryRow({
         <span className="hidden w-24 text-right text-xs whitespace-nowrap text-ink-faint lg:inline" title="Media por mes con movimientos">
           {avg ? `${fmtMoney(avg, { currency: settings.currency, locale: settings.locale, compact: true })}/mes` : ''}
         </span>
-        <select
-          className="field h-8 w-36 py-0 text-xs"
-          value={c.parentId ?? ''}
-          onChange={(e) => onChange({ parentId: e.target.value || null })}
-          aria-label="Categoría padre"
-          title="Agrupar dentro de otra categoría"
-        >
-          <option value="">Sin grupo</option>
-          {parents.map((p) => (
-            <option key={p.id} value={p.id}>
-              {categoryLabel(p, all)}
-            </option>
-          ))}
-        </select>
+        {editing && (
+          <select
+            className="field h-8 w-36 py-0 text-xs"
+            value={c.parentId ?? ''}
+            onChange={(e) => onChange({ parentId: e.target.value || null })}
+            aria-label="Categoría padre"
+            title="Agrupar dentro de otra categoría"
+          >
+            <option value="">Sin grupo</option>
+            {parents.map((p) => (
+              <option key={p.id} value={p.id}>
+                {categoryLabel(p, all)}
+              </option>
+            ))}
+          </select>
+        )}
         {c.kind === 'expense' && (
           <input
             className="field num h-8 w-24 py-0 text-xs"
@@ -262,16 +272,20 @@ function CategoryRow({
             aria-label="Presupuesto mensual"
           />
         )}
-        <select className="field h-8 w-32 py-0 text-xs" value={c.kind} onChange={(e) => onKind(e.target.value as Kind)} aria-label="Tipo">
-          {KINDS.map((k) => (
-            <option key={k} value={k}>
-              {KIND_LABEL[k]}
-            </option>
-          ))}
-        </select>
-        <button onClick={onDelete} className="rounded-md p-1.5 text-ink-faint hover:bg-danger/10 hover:text-danger" aria-label={`Borrar ${c.name}`}>
-          <Trash2 size={15} />
-        </button>
+        {editing && (
+          <>
+            <select className="field h-8 w-32 py-0 text-xs" value={c.kind} onChange={(e) => onKind(e.target.value as Kind)} aria-label="Tipo">
+              {KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+            <button onClick={onDelete} className="rounded-md p-1.5 text-ink-faint hover:bg-danger/10 hover:text-danger" aria-label={`Borrar ${c.name}`}>
+              <Trash2 size={15} />
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
@@ -352,7 +366,7 @@ export function CategoriesScreen() {
   const [tab, setTab] = useState<'categories' | 'rules'>('categories')
   const rules = useRules()
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       <Segmented<'categories' | 'rules'>
         value={tab}
         onChange={setTab}

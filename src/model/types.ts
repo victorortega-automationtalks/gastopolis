@@ -56,6 +56,8 @@ export interface BankLink {
   lastSyncAt?: number
   /** Última sincronización forzada a mano (ms): se permite una al día. */
   manualSyncAt?: number
+  /** Desde qué día traer movimientos (lo anterior ya está, p. ej. importado del Excel). */
+  syncFrom?: ISODate
   /** Hasta qué día (incluido) están ya traídos los movimientos. */
   syncedThrough?: ISODate
   lastError?: string

@@ -20,6 +20,9 @@ export const CARD_LABEL: Record<CardId, string> = {
 
 export const DEFAULT_ORDER: CardId[] = ['hero', 'city', 'kpis', 'flow', 'top', 'river', 'goals', 'leaks', 'budgets', 'upcoming', 'subscriptions', 'streak']
 
+/** Para no abrumar, de entrada solo lo esencial; el resto se enseña desde «Personalizar». */
+export const DEFAULT_HIDDEN: CardId[] = ['kpis', 'river', 'budgets', 'upcoming', 'subscriptions', 'streak']
+
 interface DashboardPrefs {
   order: CardId[]
   hidden: CardId[]
@@ -33,7 +36,7 @@ export const useDashboard = create<DashboardPrefs>()(
   persist(
     (set, get) => ({
       order: DEFAULT_ORDER,
-      hidden: [],
+      hidden: DEFAULT_HIDDEN,
       move: (id, dir) => {
         const order = [...get().order]
         const i = order.indexOf(id)
@@ -43,17 +46,24 @@ export const useDashboard = create<DashboardPrefs>()(
         set({ order })
       },
       toggle: (id) => set((s) => ({ hidden: s.hidden.includes(id) ? s.hidden.filter((h) => h !== id) : [...s.hidden, id] })),
-      reset: () => set({ order: DEFAULT_ORDER, hidden: [] }),
+      reset: () => set({ order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN }),
     }),
     {
       name: 'gastopolis.dashboard',
+      // v1: Inicio simplificado. A quien venía de antes se le ocultan también las tarjetas secundarias (se recuperan en
+      // «Personalizar»).
+      version: 1,
+      migrate: (saved, version) => {
+        const s = saved as Partial<DashboardPrefs>
+        return version < 1 ? { ...s, hidden: [...new Set([...(s.hidden ?? []), ...DEFAULT_HIDDEN])] } : s
+      },
       storage: createJSONStorage(() => localStorage),
       partialize: ({ order, hidden }) => ({ order, hidden }),
       // Tarjetas nuevas en versiones futuras aparecen al final aunque el orden guardado no las tenga.
       merge: (saved, current) => {
         const s = saved as Partial<DashboardPrefs> | undefined
         const order = (s?.order ?? []).filter((id) => DEFAULT_ORDER.includes(id))
-        return { ...current, order: [...order, ...DEFAULT_ORDER.filter((id) => !order.includes(id))], hidden: s?.hidden ?? [] }
+        return { ...current, order: [...order, ...DEFAULT_ORDER.filter((id) => !order.includes(id))], hidden: s?.hidden ?? DEFAULT_HIDDEN }
       },
     },
   ),

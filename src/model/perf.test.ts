@@ -8,6 +8,7 @@ import { balanceBetween } from './balance'
 import { DEFAULT_FILTERS } from './period'
 import { moneyFlow } from './flow'
 import { buildHierarchy } from './hierarchy'
+import { cushionLayout, renderCushions } from '../scenes/dirstat/layout'
 import { baselineFrom, project, DEFAULT_ASSUMPTIONS } from './lab'
 import { detectLeaks } from './leaks'
 import { detectRecurring } from './recurring'
@@ -42,6 +43,10 @@ describe('rendimiento con 12.000 movimientos', () => {
     const all = time('filtros', () => applyFilters(movements, DEFAULT_FILTERS, categories, asOf))
     const expenses = all.filter((m) => m.kind === 'expense')
     const root = time('jerarquía de la Ciudad', () => buildHierarchy(expenses, categories, ['category', 'concept'], 'Gastos'))
+    time('WinDirStat: treemap con relieve (1600×500, ×2)', () => {
+      const ds = cushionLayout(root, 1600, 500)
+      return renderCushions(ds.leaves, 3200, 1000, 2)
+    })
     const city = time('plano de la Ciudad', () => layoutCity(root, { depth: 2, heightBy: 'count', colorBy: 'category' }))
     const grow = time('índice de crecimiento', () => growthIndex(city, 'count'))
     const frames = buildFrames('2018-11-01', asOf, 'day')
