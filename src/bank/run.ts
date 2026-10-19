@@ -7,7 +7,7 @@ import { compileRules } from '../model/rules'
 import type { BankLink, BankSecret, Movement } from '../model/types'
 import { bankAuthWindow, bankRequest, bankSupported, openExternal } from '../platform'
 import { ebClient, EbError, parseCallback, type Aspsp, type EbClient, type EbSession, type EbTransport } from './enablebanking'
-import { consentUntil, fetchRange, internalTransfers, isDue, manualSync, reconcile, toDrafts, type OfferedAccount } from './sync'
+import { consentLimit, consentUntil, fetchRange, internalTransfers, isDue, manualSync, reconcile, toDrafts, type OfferedAccount } from './sync'
 
 export { offeredAccounts, type OfferedAccount } from './sync'
 
@@ -145,11 +145,18 @@ export async function authorize(aspsp: Aspsp, pasted: Promise<string>, handle: A
   if (!secret) throw new Error('Falta configurar Enable Banking')
   const client = await bankClient(secret)
   const state = newId()
-  const url = await client.startAuth({
-    aspsp: { name: aspsp.name, country: aspsp.country },
-    validUntil: consentUntil(Date.now(), aspsp.maximum_consent_validity),
-    redirectUrl: secret.redirectUrl,
-    state,
+  const begin = (maxSeconds?: number) =>
+    client.startAuth({
+      aspsp: { name: aspsp.name, country: aspsp.country },
+      validUntil: consentUntil(Date.now(), maxSeconds),
+      redirectUrl: secret.redirectUrl,
+      state,
+    })
+  // Si el banco admite menos días de los que anuncia, lo dice en el error: se vuelve a pedir con su máximo.
+  const url = await begin(aspsp.maximum_consent_validity).catch((e: unknown) => {
+    const limit = consentLimit(errorMessage(e))
+    if (!limit) throw e
+    return begin(limit)
   })
   handle.onUrl?.(url)
   let back: string | null

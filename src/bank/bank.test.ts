@@ -6,6 +6,7 @@ import {
   cleanConcept,
   consentState,
   offeredAccounts,
+  consentLimit,
   consentUntil,
   fetchRange,
   internalTransfers,
@@ -69,8 +70,13 @@ describe('sincronización: cuándo y qué pedir', () => {
     expect(consentState({ validUntil: new Date(now + 5 * DAY).toISOString() }, now)).toEqual({ state: 'expiring', daysLeft: 5 })
     expect(consentState({ validUntil: new Date(now - DAY).toISOString() }, now).state).toBe('expired')
     // Lo máximo que deje el banco, con 180 días de tope.
-    expect(Date.parse(consentUntil(now, 365 * 86_400)) - now).toBe(180 * DAY)
-    expect(Date.parse(consentUntil(now)) - now).toBe(90 * DAY)
+    // Un día menos del máximo: pedir justo 180 días lo rechaza el banco si el reloj va adelantado.
+    expect(Date.parse(consentUntil(now, 365 * 86_400)) - now).toBe(179 * DAY)
+    expect(Date.parse(consentUntil(now, 15_552_000)) - now).toBe(179 * DAY)
+    expect(Date.parse(consentUntil(now)) - now).toBe(89 * DAY)
+    expect(Date.parse(consentUntil(now, 3600)) - now).toBe(DAY)
+    expect(consentLimit('[WRONG_REQUEST_PARAMETERS] ASPSP does not support consent validity more than 7776000 seconds in the future')).toBe(7_776_000)
+    expect(consentLimit('otra cosa')).toBeUndefined()
   })
 })
 

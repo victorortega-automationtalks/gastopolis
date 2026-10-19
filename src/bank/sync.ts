@@ -54,10 +54,20 @@ export function consentState(link: Pick<BankLink, 'validUntil'>, now: number, wa
   return { state: left <= 0 ? 'expired' : left <= warnDays ? 'expiring' : 'ok', daysLeft: Math.max(0, Math.ceil(left)) }
 }
 
-/** Hasta cuándo pedir el permiso: lo máximo que admite el banco, con 180 días de tope y 90 si no lo dice. */
+/**
+ * Hasta cuándo pedir el permiso: lo máximo que admite el banco (180 días de tope, 90 si no lo dice) menos un día. Pedir
+ * justo el máximo falla («ASPSP does not support consent validity more than 15552000 seconds») con que el reloj del
+ * equipo vaya un poco adelantado.
+ */
 export function consentUntil(now: number, maxSeconds?: number): string {
   const days = Math.min(180, maxSeconds ? Math.floor(maxSeconds / 86_400) : 90)
-  return new Date(now + Math.max(1, days) * DAY).toISOString()
+  return new Date(now + Math.max(1, days - 1) * DAY).toISOString()
+}
+
+/** Si el banco rechaza la duración del permiso, el máximo que dice admitir (en segundos). */
+export function consentLimit(message: string): number | undefined {
+  const m = /consent validity more than (\d+) seconds/i.exec(message)
+  return m ? Number(m[1]) : undefined
 }
 
 /** «ES12 3456 7890 1234 5678 9012» → «ES12 •••• 9012». */
