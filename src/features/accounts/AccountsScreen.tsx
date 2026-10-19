@@ -12,6 +12,7 @@ import { Button, Card, Field, Modal, Money, Segmented } from '../../ui/component
 import { AutoAssign } from './AutoAssign'
 import { BankSetup } from './BankSetup'
 import { ConnectBank } from './ConnectBank'
+import { PanelGuide } from './PanelGuide'
 
 const KIND_ICON: Record<AccountKind, LucideIcon> = { cash: Banknote, bank: Landmark, other: Wallet }
 const KIND_LABEL: Record<AccountKind, string> = { cash: 'Efectivo', bank: 'Banco', other: 'Otra' }
@@ -144,9 +145,9 @@ export function AccountsScreen() {
         )}
 
         {bankEnabled && secret && !banks.length && (
-          <div className="mt-4 rounded-xl border border-line bg-surface p-4 text-sm text-ink-muted">
-            Aún no hay ningún banco conectado en Gastópolis. El que enlazaste en el panel de Enable Banking (con «Activate by linking accounts») solo sirve para
-            activar tu aplicación; para traer sus movimientos, pulsa <b className="text-ink">Conectar un banco</b> y elige ese mismo banco.
+          <div className="mt-4 space-y-3">
+            <p className="text-sm text-ink-muted">Aún no hay ningún banco conectado en Gastópolis.</p>
+            <PanelGuide compact />
           </div>
         )}
 

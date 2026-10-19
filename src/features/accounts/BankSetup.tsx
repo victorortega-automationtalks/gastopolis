@@ -1,20 +1,19 @@
 import clsx from 'clsx'
-import { Check, Copy, ExternalLink, FileKey2, ShieldCheck } from 'lucide-react'
+import { Check, Copy, FileKey2, ShieldCheck } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { DEFAULT_REDIRECT, listBanks } from '../../bank/run'
 import { useBankSecret } from '../../data/hooks'
 import { saveBankSecret } from '../../data/repo'
 import { errorMessage } from '../../lib/errors'
-import { openExternal } from '../../platform'
 import { useUI } from '../../store/ui'
 import { Button, Field, Modal } from '../../ui/components/primitives'
+import { CONTROL_PANEL, LinkButton } from './PanelGuide'
 
 /**
  * Tutorial para crear la cuenta y la aplicación de Enable Banking, y cargar su credencial en Gastópolis. Enable
  * Banking es quien habla con los bancos por PSD2; en modo «restringido» es gratis para leer tus propias cuentas.
  */
 
-const CONTROL_PANEL = 'https://enablebanking.com/cp/applications'
 const SIGN_IN = 'https://enablebanking.com/sign-in/'
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 
@@ -49,15 +48,6 @@ function CopyLine({ value }: { value: string }) {
         {done ? <Check size={15} className="text-income" /> : <Copy size={15} />}
       </button>
     </div>
-  )
-}
-
-function LinkButton({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <Button size="sm" onClick={() => void openExternal(href)}>
-      <ExternalLink size={14} />
-      {children}
-    </Button>
   )
 }
 

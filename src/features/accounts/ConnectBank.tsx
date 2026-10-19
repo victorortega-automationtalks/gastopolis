@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Landmark, Loader2, Search } from 'lucide-react'
+import { ExternalLink, Landmark, Loader2, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Aspsp, EbSession } from '../../bank/enablebanking'
 import { authorize, listBanks, offeredAccounts, saveConnection, syncAccount, type OfferedAccount, type SyncOutcome } from '../../bank/run'
@@ -8,6 +8,7 @@ import { errorMessage } from '../../lib/errors'
 import { openExternal } from '../../platform'
 import { useUI } from '../../store/ui'
 import { Button, Field, Modal } from '../../ui/components/primitives'
+import { PanelGuide } from './PanelGuide'
 
 const COUNTRIES = [
   { code: 'ES', label: 'España' },
@@ -126,10 +127,7 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
 
       {phase === 'pick' && (
         <div className="space-y-3">
-          <p className="text-xs text-ink-muted">
-            Lo que enlazaste en el panel de Enable Banking solo activa tu aplicación: aquí hay que conectar el banco otra vez para que Gastópolis tenga su
-            propio permiso. Elige el mismo banco (y entra con la misma cuenta) que enlazaste allí.
-          </p>
+          <PanelGuide />
           <div className="flex flex-wrap gap-2">
             <select className="field w-auto" value={country} onChange={(e) => setCountry(e.target.value)} aria-label="País del banco">
               {COUNTRIES.map((c) => (
@@ -173,20 +171,18 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
           </p>
           <p>Al terminar, la ventana se cierra sola y sigues aquí.</p>
           {!usingBrowser ? (
-            <p>
-              ¿Tu banco no funciona en esa ventana?{' '}
-              <button
-                className="font-medium text-accent-2 hover:underline"
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-3">
+              <p className="min-w-48 flex-1">¿No carga, se queda esperando o dice que bloquea una ventana? Algunos bancos solo funcionan en tu navegador.</p>
+              <Button
                 onClick={() => {
                   browser.current = true
                   setUsingBrowser(true)
                   if (authUrl.current) void openExternal(authUrl.current)
                 }}
               >
-                Ábrelo en el navegador
-              </button>
-              .
-            </p>
+                <ExternalLink size={15} /> Ábrelo en el navegador
+              </Button>
+            </div>
           ) : (
             <p>Al terminar en el navegador verás una página que no carga: es normal. Copia la dirección completa de la barra y pégala aquí abajo.</p>
           )}
