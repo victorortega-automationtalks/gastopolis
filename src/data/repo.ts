@@ -595,6 +595,13 @@ export const BANK_CATEGORIES = {
   transfer: ['Traspasos entre mis cuentas', 'transfer'],
 } as const
 
+/** Ids de las categorías de reserva que ya existan («Sin clasificar», «Otros ingresos»): lo que aún está por clasificar. */
+export function reserveCategoryIds(categories: Pick<Category, 'id' | 'name' | 'kind'>[]): string[] {
+  return [BANK_CATEGORIES.expense, BANK_CATEGORIES.income]
+    .map(([name, kind]) => categories.find((c) => c.kind === kind && normalizeKey(c.name) === normalizeKey(name))?.id)
+    .filter((id): id is string => !!id)
+}
+
 /** Las categorías de reserva de la sincronización (se crean la primera vez). */
 export async function bankFallbacks(): Promise<{ expense: string; income: string; transfer: string }> {
   return {

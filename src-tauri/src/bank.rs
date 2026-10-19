@@ -129,21 +129,56 @@ pub async fn bank_auth_window(app: tauri::AppHandle, url: String, redirect: Stri
     if start.scheme() != "https" {
         return Err("La página del banco tiene que ser https".into());
     }
-    if let Some(old) = app.get_webview_window("bank-auth") {
-        let _ = old.destroy();
+    for (label, old) in app.webview_windows() {
+        if label.starts_with("bank-auth") {
+            let _ = old.destroy();
+        }
     }
     let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
     let on_nav = tx.clone();
+    let main_redirect = redirect.clone();
+    let popup_app = app.clone();
+    let popup_tx = tx.clone();
+    let popups = std::sync::atomic::AtomicUsize::new(0);
     let window = tauri::WebviewWindowBuilder::new(&app, "bank-auth", tauri::WebviewUrl::External(start))
         .title("Gastópolis · Entra en tu banco")
         .inner_size(960.0, 780.0)
         .center()
         .on_navigation(move |u| {
-            if is_redirect(u.as_str(), &redirect) {
+            if is_redirect(u.as_str(), &main_redirect) {
                 let _ = on_nav.send(Some(u.to_string()));
                 return false;
             }
             u.scheme() == "https"
+        })
+        // Algunos bancos (Revolut) autorizan en una ventana emergente y la página espera a que termine. Se abre como
+        // ventana hija con las mismas reglas: solo https y la vuelta del banco se recoge también desde ella.
+        .on_new_window(move |url, features| {
+            if url.scheme() != "https" {
+                return tauri::webview::NewWindowResponse::Deny;
+            }
+            let n = popups.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let tx = popup_tx.clone();
+            let redirect = redirect.clone();
+            let built = tauri::WebviewWindowBuilder::new(
+                &popup_app,
+                format!("bank-auth-popup-{n}"),
+                tauri::WebviewUrl::External("about:blank".parse().unwrap()),
+            )
+            .window_features(features)
+            .title("Gastópolis · Autoriza en tu banco")
+            .on_navigation(move |u| {
+                if is_redirect(u.as_str(), &redirect) {
+                    let _ = tx.send(Some(u.to_string()));
+                    return false;
+                }
+                u.scheme() == "https" || u.as_str() == "about:blank"
+            })
+            .build();
+            match built {
+                Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+                Err(_) => tauri::webview::NewWindowResponse::Deny,
+            }
         })
         .build()
         .map_err(|e| e.to_string())?;
@@ -155,8 +190,10 @@ pub async fn bank_auth_window(app: tauri::AppHandle, url: String, redirect: Stri
     let got = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(1800)).ok().flatten())
         .await
         .map_err(|e| e.to_string())?;
-    if let Some(w) = app.get_webview_window("bank-auth") {
-        let _ = w.destroy();
+    for (label, w) in app.webview_windows() {
+        if label.starts_with("bank-auth") {
+            let _ = w.destroy();
+        }
     }
     Ok(got)
 }

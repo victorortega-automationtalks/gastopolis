@@ -2,8 +2,7 @@ import clsx from 'clsx'
 import { Wand2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useCategories, useRawMovements } from '../../data/hooks'
-import { applyAutoAssign, BANK_CATEGORIES } from '../../data/repo'
-import { normalizeKey } from '../../lib/text'
+import { applyAutoAssign, reserveCategoryIds } from '../../data/repo'
 import { planAutoAssign } from '../../model/autocat'
 import { useUI } from '../../store/ui'
 import { Button, Modal, Money } from '../../ui/components/primitives'
@@ -19,12 +18,7 @@ export function AutoAssign({ onClose }: { onClose: () => void }) {
   const [off, setOff] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
 
-  const plan = useMemo(() => {
-    const reserve = [BANK_CATEGORIES.expense, BANK_CATEGORIES.income].map(
-      ([name, kind]) => categories.find((c) => c.kind === kind && normalizeKey(c.name) === normalizeKey(name))?.id ?? '',
-    )
-    return planAutoAssign(movements, categories, reserve)
-  }, [movements, categories])
+  const plan = useMemo(() => planAutoAssign(movements, categories, reserveCategoryIds(categories)), [movements, categories])
 
   const chosen = plan.groups.filter((g) => !off.has(g.auto.key))
   const count = chosen.reduce((n, g) => n + g.ids.length, 0)

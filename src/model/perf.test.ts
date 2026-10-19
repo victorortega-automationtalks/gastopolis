@@ -19,6 +19,8 @@ import { REPORTS } from './reports/catalog'
 import { reportsToPdf } from './reports/pdf'
 import { reportsToXlsx } from './reports/sheet'
 import { DEFAULT_SETTINGS } from './defaults'
+import { planAutoAssign } from './autocat'
+import { suggestRules } from './ruleSuggest'
 
 /**
  * Rendimiento con 12.000 movimientos en 8 años y 900 comercios. Los límites son holgados (la máquina de CI es lenta
@@ -55,6 +57,14 @@ describe('rendimiento con 12.000 movimientos', () => {
       monthProjection(movements, asOf),
       noSpendStreak(movements, asOf),
     ])
+    time('sugerencias de reglas', () => suggestRules(movements, [], categories, []))
+    time('asignar categorías automáticamente', () =>
+      planAutoAssign(
+        movements.map((m) => ({ ...m, source: 'bank' as const })),
+        categories,
+        categories.map((c) => c.id),
+      ),
+    )
     time('Laboratorio (10 años)', () => project(baselineFrom(movements, categories, asOf), [], { ...DEFAULT_ASSUMPTIONS, years: 10 }))
     if (import.meta.env.PERF) console.table(timings.map(([n, ms]) => ({ cálculo: n, ms: Math.round(ms * 10) / 10 })))
     for (const [name, ms] of timings) expect(ms, name).toBeLessThan(1500)

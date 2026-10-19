@@ -26,6 +26,7 @@ describe('clasificación automática', () => {
   it('lo que te devuelve un comercio es una devolución, nunca un gasto en positivo', () => {
     expect(name('Www.Amazon* AB12 Luxembourg', 35)).toBe('Devoluciones de compras')
     expect(name('Www.Amazon* AB12 Luxembourg', -35)).toBe('Compras online')
+    expect(name('Winamax Es Internet 0100', 50)).toBe('Premios de apuestas')
   })
 
   it('Bizum: el concepto manda y, si no dice nada, va a Bizum', () => {

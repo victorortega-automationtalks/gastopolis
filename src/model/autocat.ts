@@ -52,6 +52,7 @@ export const AUTO_CATEGORIES = {
   bizumIn: cat('bizumIn', 'Bizum recibidos', 'income', ['Bizum']),
   sales: cat('sales', 'Ventas de segunda mano', 'income', ['Ventas', 'Wallapop', 'Vinted']),
   refunds: cat('refunds', 'Devoluciones de compras', 'income', ['Devoluciones', 'Reembolsos', 'Reembolso']),
+  winnings: cat('winnings', 'Premios de apuestas', 'income', ['Premios', 'Ganancias apuestas']),
   bonus: cat('bonus', 'Bonificaciones y promociones', 'income', ['Bonificaciones', 'Promociones', 'Cashback']),
   // Traspasos (dinero que cambia de bolsillo)
   ownTransfer: cat('ownTransfer', 'Traspasos entre mis cuentas', 'transfer', ['Traspasos', 'Traspaso']),
@@ -805,6 +806,8 @@ export function classify(m: Pick<Movement, 'concept' | 'amount'>, ctx: AutoConte
   const payer = payerKey(m.concept)
   if (ctx.payroll.has(payer)) return AUTO_CATEGORIES.payroll
   if (INSTITUTION.test(w)) return AUTO_CATEGORIES.work
+  // Lo que entra de una casa de apuestas son premios, no una devolución.
+  if (merchant === 'betting') return AUTO_CATEGORIES.winnings
   if (kind === 'expense') return AUTO_CATEGORIES.refunds
   if (ctx.work.has(payer)) return AUTO_CATEGORIES.work
   return undefined
