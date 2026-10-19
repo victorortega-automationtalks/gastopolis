@@ -98,16 +98,13 @@ export async function bankRequest(call: BankCall): Promise<{ status: number; bod
   return invoke('bank_request', { call: { ...call, query: call.query ?? [] } })
 }
 
-/** Espera en localhost a que el banco devuelva al usuario. Devuelve «/callback?code=…» o null. */
-export async function waitBankCallback(port: number, timeoutSecs = 900): Promise<string | null> {
+/**
+ * Entra en el banco en una ventana de la app y devuelve la dirección de vuelta (con el código) en cuanto el banco
+ * redirige a ella, sin llegar a cargarla. null si se cierra la ventana.
+ */
+export async function bankAuthWindow(url: string, redirect: string): Promise<string | null> {
   const { invoke } = await import('@tauri-apps/api/core')
-  return invoke('bank_wait_callback', { port, timeoutSecs })
-}
-
-export async function cancelBankCallback(): Promise<void> {
-  if (runtime !== 'tauri') return
-  const { invoke } = await import('@tauri-apps/api/core')
-  await invoke('bank_cancel_callback')
+  return invoke('bank_auth_window', { url, redirect })
 }
 
 /** Abre una página https en el navegador del sistema (en la web, en otra pestaña). */

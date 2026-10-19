@@ -81,8 +81,7 @@ pub fn run() {
             save_text_file,
             save_binary_file,
             bank::bank_request,
-            bank::bank_wait_callback,
-            bank::bank_cancel_callback,
+            bank::bank_auth_window,
             bank::open_external
         ])
         .setup(|app| {

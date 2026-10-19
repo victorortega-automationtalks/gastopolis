@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Aspsp, EbSession } from '../../bank/enablebanking'
 import { authorize, listBanks, offeredAccounts, saveConnection, syncAccount, type OfferedAccount, type SyncOutcome } from '../../bank/run'
 import { queries } from '../../data/queries'
+import { openExternal } from '../../platform'
 import { useUI } from '../../store/ui'
 import { Button, Field, Modal } from '../../ui/components/primitives'
 
@@ -36,6 +37,9 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
   const [pastedText, setPastedText] = useState('')
   const [outcomes, setOutcomes] = useState<SyncOutcome[] | null>(null)
   const pasteResolver = useRef<((v: string) => void) | null>(null)
+  const authUrl = useRef<string | null>(null)
+  const browser = useRef(false)
+  const [usingBrowser, setUsingBrowser] = useState(false)
 
   useEffect(() => {
     if (!open || renew) return
@@ -52,7 +56,9 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
     setError(null)
     const pasted = new Promise<string>((resolve) => (pasteResolver.current = resolve))
     try {
-      const s = await authorize(aspsp, pasted)
+      browser.current = false
+      setUsingBrowser(false)
+      const s = await authorize(aspsp, pasted, { onUrl: (u) => (authUrl.current = u), usingBrowser: () => browser.current })
       setSession(s)
       // De la base de datos, no del hook: al renovar esto corre nada más abrir, antes de que el hook tenga las cuentas.
       const accounts = await queries.accountsInOrder()
@@ -153,19 +159,35 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
       {phase === 'auth' && (
         <div className="space-y-4 text-sm text-ink-muted">
           <p className="flex items-center gap-2 text-ink">
-            <Loader2 size={16} className="animate-spin text-accent-2" /> Entra en {bank?.name ?? 'tu banco'} en el navegador y da el permiso de lectura.
+            <Loader2 size={16} className="animate-spin text-accent-2" /> Entra en {bank?.name ?? 'tu banco'} en la ventana que se ha abierto y da el permiso de
+            lectura.
           </p>
-          <p>Cuando termines, el navegador te devolverá aquí solo. Puedes cerrar esa pestaña.</p>
-          <Field
-            label="¿No vuelve solo?"
-            hint="Copia la dirección completa de la barra del navegador (empieza por la dirección de vuelta y lleva «?code=…») y pégala aquí."
-          >
+          <p>Al terminar, la ventana se cierra sola y sigues aquí.</p>
+          {!usingBrowser ? (
+            <p>
+              ¿Tu banco no funciona en esa ventana?{' '}
+              <button
+                className="font-medium text-accent-2 hover:underline"
+                onClick={() => {
+                  browser.current = true
+                  setUsingBrowser(true)
+                  if (authUrl.current) void openExternal(authUrl.current)
+                }}
+              >
+                Ábrelo en el navegador
+              </button>
+              .
+            </p>
+          ) : (
+            <p>Al terminar en el navegador verás una página que no carga: es normal. Copia la dirección completa de la barra y pégala aquí abajo.</p>
+          )}
+          <Field label="Dirección de vuelta" hint="La de la barra del navegador al terminar: empieza por tu dirección de vuelta y lleva «?code=…».">
             <div className="flex gap-2">
               <input
                 className="field num"
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
-                placeholder="https://localhost:47823/callback?code=…"
+                placeholder="https://gastopolis.invalid/callback?code=…"
               />
               <Button disabled={!/code=/.test(pastedText)} onClick={() => pasteResolver.current?.(pastedText)}>
                 Usar
