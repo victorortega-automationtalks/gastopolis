@@ -222,6 +222,10 @@ export function BankSetup({ open, onClose, onReady }: { open: boolean; onClose: 
             Al terminar, la aplicación aparece como <b className="text-ink">Restricted</b> y <b className="text-ink">Active</b>: puede leer solo las cuentas que
             has enlazado, que es justo lo que queremos. Si más adelante abres otra cuenta, vuelve aquí y enlázala también.
           </p>
+          <p>
+            Ojo: enlazar en el panel solo <b className="text-ink">activa</b> la aplicación. Después, en Gastópolis, pulsa{' '}
+            <b className="text-ink">Conectar un banco</b> y vuelve a entrar en ese mismo banco: así la app recibe su propio permiso de lectura.
+          </p>
           <p className="text-xs">Revolut suele estar como banco de Lituania (Revolut Bank UAB). B100 es de ABANCA: si no aparece aparte, entra por ABANCA.</p>
           <LinkButton href={CONTROL_PANEL}>Abrir el panel de control</LinkButton>
         </Step>

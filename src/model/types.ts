@@ -54,6 +54,8 @@ export interface BankLink {
   validUntil: string
   /** Última sincronización correcta (ms). */
   lastSyncAt?: number
+  /** Última sincronización forzada a mano (ms): se permite una al día. */
+  manualSyncAt?: number
   /** Hasta qué día (incluido) están ya traídos los movimientos. */
   syncedThrough?: ISODate
   lastError?: string

@@ -7,7 +7,7 @@ import { compileRules } from '../model/rules'
 import type { BankLink, BankSecret, Movement } from '../model/types'
 import { bankAuthWindow, bankRequest, bankSupported, openExternal } from '../platform'
 import { ebClient, EbError, parseCallback, type Aspsp, type EbClient, type EbSession, type EbTransport } from './enablebanking'
-import { consentUntil, fetchRange, internalTransfers, isDue, reconcile, toDrafts, type OfferedAccount } from './sync'
+import { consentUntil, fetchRange, internalTransfers, isDue, manualSync, reconcile, toDrafts, type OfferedAccount } from './sync'
 
 export { offeredAccounts, type OfferedAccount } from './sync'
 
@@ -61,11 +61,17 @@ export interface SyncOutcome {
 
 const busy = new Set<string>()
 
-/** Trae lo nuevo de una cuenta: solo desde unos días antes de lo último traído. */
-export async function syncAccount(accountId: string): Promise<SyncOutcome> {
+/**
+ * Trae lo nuevo de una cuenta: solo desde unos días antes de lo último traído. `manual`: la ha pedido el usuario; se
+ * permite una al día por cuenta (gasta del cupo del banco), y se apunta aunque falle.
+ */
+export async function syncAccount(accountId: string, opts: { manual?: boolean } = {}): Promise<SyncOutcome> {
   const account = await db.accounts.get(accountId)
   if (!account?.bank) throw new Error('Esa cuenta no está conectada a un banco')
   if (busy.has(accountId)) return { account: account.name, added: 0, linked: 0, transfers: 0 }
+  if (opts.manual && !manualSync(account.bank, Date.now()).ok)
+    return { account: account.name, added: 0, linked: 0, transfers: 0, error: 'Ya la has sincronizado a mano hoy: vuelve a probar mañana.' }
+  const manual = opts.manual ? { manualSyncAt: Date.now() } : {}
   busy.add(accountId)
   try {
     const client = await bankClient()
@@ -92,29 +98,27 @@ export async function syncAccount(accountId: string): Promise<SyncOutcome> {
       account.id,
       plan,
       { pairs, categoryId: fallback.transfer },
-      { lastSyncAt: Date.now(), syncedThrough: range.dateTo, lastError: undefined, balance },
+      { lastSyncAt: Date.now(), syncedThrough: range.dateTo, lastError: undefined, balance, ...manual },
     )
     return { account: account.name, added: plan.added.length, linked: plan.linked.length, transfers: pairs.length }
   } catch (e) {
     const expired = e instanceof EbError && e.expired
-    await updateBankLink(accountId, { lastError: errorMessage(e), ...(expired ? { validUntil: new Date().toISOString() } : {}) })
+    await updateBankLink(accountId, { lastError: errorMessage(e), ...manual, ...(expired ? { validUntil: new Date().toISOString() } : {}) })
     return { account: account.name, added: 0, linked: 0, transfers: 0, error: errorMessage(e) }
   } finally {
     busy.delete(accountId)
   }
 }
 
-/** Sincroniza las cuentas a las que les toca (o todas, si lo pides tú). */
-export async function syncAccounts(opts: { force?: boolean } = {}): Promise<SyncOutcome[]> {
+/** Sincroniza las cuentas a las que les toca o, con `manual`, todas las que aún no se han forzado hoy. */
+export async function syncAccounts(opts: { manual?: boolean } = {}): Promise<SyncOutcome[]> {
   if (!bankEnabled) return []
   const [accounts, settings, secret] = await Promise.all([db.accounts.toArray(), db.settings.get('settings'), db.secrets.get('enablebanking')])
   if (!secret) return []
   const now = Date.now()
-  const due = accounts.filter(
-    (a) => a.bank && !a.archived && (opts.force ? Date.parse(a.bank.validUntil) > now : isDue(a.bank, now, settings?.bankSyncHours ?? 6)),
-  )
+  const due = accounts.filter((a) => a.bank && !a.archived && (opts.manual ? manualSync(a.bank, now).ok : isDue(a.bank, now, settings?.bankSyncHours ?? 6)))
   const out: SyncOutcome[] = []
-  for (const a of due) out.push(await syncAccount(a.id))
+  for (const a of due) out.push(await syncAccount(a.id, { manual: opts.manual }))
   return out
 }
 

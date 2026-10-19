@@ -10,6 +10,7 @@ import {
   fetchRange,
   internalTransfers,
   isDue,
+  manualSync,
   maskIban,
   reconcile,
   toDrafts,
@@ -51,6 +52,15 @@ describe('sincronización: cuándo y qué pedir', () => {
     expect(isDue({ validUntil: valid, lastSyncAt: now - 2 * 3_600_000 }, now, 1)).toBe(false)
     expect(isDue({ validUntil: valid, lastSyncAt: now - 7 * 3_600_000 }, now, 6)).toBe(true)
     expect(isDue({ validUntil: new Date(now - 1000).toISOString() }, now, 6)).toBe(false)
+  })
+
+  it('sincronizar a mano: una vez al día por cuenta', () => {
+    const now = Date.parse('2026-10-19T12:00:00Z')
+    const valid = new Date(now + 30 * DAY).toISOString()
+    expect(manualSync({ validUntil: valid }, now)).toEqual({ ok: true })
+    expect(manualSync({ validUntil: valid, manualSyncAt: now - 3_600_000 }, now)).toEqual({ ok: false, nextAt: now + 23 * 3_600_000 })
+    expect(manualSync({ validUntil: valid, manualSyncAt: now - DAY }, now).ok).toBe(true)
+    expect(manualSync({ validUntil: new Date(now - 1000).toISOString() }, now).ok).toBe(false)
   })
 
   it('avisa una semana antes de que caduque el permiso', () => {
@@ -244,6 +254,19 @@ describe('cliente de Enable Banking', () => {
     expect(expired).toBeInstanceOf(EbError)
     expect((expired as EbError).expired).toBe(true)
     await expect(fail(429, { message: 'Too many requests' })).rejects.toThrow(/4 al día/)
+  })
+
+  it('un 403 que no es de sesión no se disfraza de «permiso caducado» y deja ver el error original', async () => {
+    const fail = (status: number, body: object) => ebClient(async () => ({ status, body: JSON.stringify(body) })).aspsps('ES')
+    const odd = (await fail(403, { code: 403, error: 'UNAUTHORIZED_ACCESS', message: 'Unauthorized access' }).catch((e: EbError) => e)) as EbError
+    expect(odd.expired).toBe(false)
+    expect(odd.message).not.toMatch(/caducado/)
+    expect(odd.message).toMatch(/\[UNAUTHORIZED_ACCESS\] Unauthorized access/)
+    await expect(fail(400, { error: 'REDIRECT_URI_NOT_ALLOWED', message: 'Redirect URI not allowed' })).rejects.toThrow(/Redirect URLs/)
+    await expect(fail(403, { error: 'NO_ACCOUNTS_ADDED', message: 'No allowed accounts added to the application' })).rejects.toThrow(/linking accounts/)
+    await expect(fail(422, { error: 'WRONG_REQUEST_PARAMETERS', message: 'x', detail: { field: 'valid_until' } })).rejects.toThrow(/valid_until/)
+    const revoked = (await fail(403, { error: 'REVOKED_SESSION', message: 'Session is revoked' }).catch((e: EbError) => e)) as EbError
+    expect(revoked.expired).toBe(true)
   })
 
   it('lee el código de vuelta de la dirección o de lo que se pega', () => {

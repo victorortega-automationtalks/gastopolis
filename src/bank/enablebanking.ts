@@ -73,31 +73,54 @@ export class EbError extends Error {
   }
 }
 
-function explain(status: number, body: string): EbError {
+/** Códigos de la API que significan que la sesión con el banco ya no vale y hay que volver a dar permiso. */
+const SESSION_GONE = new Set(['EXPIRED_SESSION', 'CLOSED_SESSION', 'REVOKED_SESSION', 'SESSION_DOES_NOT_EXIST'])
+
+/**
+ * Traduce un error de la API. Siempre deja a la vista el código y el mensaje originales («[CÓDIGO] mensaje»): un error
+ * que no se reconoce no se disfraza de otro (pasó: cualquier 403 se leía como «permiso caducado»).
+ */
+export function explain(status: number, body: string): EbError {
   let code = ''
   let detail = ''
   try {
     const j = JSON.parse(body) as { code?: string | number; error?: string; message?: string; detail?: unknown }
-    code = String(j.error ?? j.code ?? '')
-    detail = [j.message, typeof j.detail === 'string' ? j.detail : ''].filter(Boolean).join(' · ')
+    code = typeof j.error === 'string' ? j.error : ''
+    const extra = j.detail == null ? '' : typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail)
+    detail = [j.message, extra].filter(Boolean).join(' · ').slice(0, 300)
   } catch {
     detail = body.slice(0, 200)
   }
+  const raw = [code && `[${code}]`, detail || `HTTP ${status}`].filter(Boolean).join(' ')
+  const say = (msg: string, expired = false) => new EbError(status, `${msg} (Enable Banking: ${raw})`, expired)
   const text = `${code} ${detail}`.toLowerCase()
+
+  if (SESSION_GONE.has(code) || /session (is )?(expired|closed|revoked)/.test(text))
+    return say('El permiso del banco ha caducado o se ha revocado: renuévalo para seguir sincronizando.', true)
+  if (code === 'REDIRECT_URI_NOT_ALLOWED')
+    return say(
+      'La dirección de vuelta no está registrada en tu aplicación de Enable Banking. En su panel, en «Redirect URLs», añade exactamente la misma que tienes en el paso 5 del tutorial (Cuentas → Credencial).',
+    )
+  if (code === 'NO_ACCOUNTS_ADDED')
+    return say('Tu aplicación está en modo restringido y aún no tiene cuentas enlazadas. En el panel de Enable Banking pulsa «Activate by linking accounts».')
+  if (code === 'ACCESS_DENIED' || code === 'UNAUTHORIZED_IP')
+    return say('Enable Banking no deja a tu aplicación hacer esto. Revisa en su panel que la aplicación esté activa y tenga «Account information» (AIS).')
+  if (code === 'WRONG_ASPSP_PROVIDED') return say('Enable Banking no reconoce ese banco en ese país.')
+  if (code === 'EXPIRED_AUTHORIZATION_CODE' || code === 'WRONG_AUTHORIZATION_CODE' || code === 'ALREADY_AUTHORIZED')
+    return say('La vuelta del banco ya no vale (el código caduca en minutos). Vuelve a conectar.')
   // Aplicación registrada pero sin activar: hay que enlazar alguna cuenta en el panel («Activate by linking accounts»).
-  if (/not active|inactive|not activated|is not enabled|restricted/.test(text))
-    return new EbError(
-      status,
+  if (/not active|inactive|not activated|is not enabled/.test(text))
+    return say(
       'Tu aplicación de Enable Banking aún no está activa. En su panel pulsa «Activate by linking accounts» y enlaza al menos un banco (paso 4 del tutorial); después vuelve a probar.',
     )
-  // Va primero: un 403 «Application does not exist» es la credencial, no el permiso del banco.
-  if ((status === 401 || status === 403) && /jwt|token|signature|application|kid/.test(text))
-    return new EbError(status, 'Enable Banking no acepta la credencial: revisa el id de la aplicación y el archivo .pem (Cuentas → Enable Banking).')
-  if (/expired|revoked|not authori[sz]ed|consent|session.*(closed|invalid)/.test(text) || status === 401 || status === 403)
-    return new EbError(status, 'El permiso del banco ha caducado o se ha revocado: renuévalo para seguir sincronizando.', true)
-  if (status === 429) return new EbError(status, 'El banco limita las consultas (4 al día sin ti delante): se volverá a intentar más tarde.')
-  if (status >= 500) return new EbError(status, 'El banco o Enable Banking no responden ahora mismo. Se reintentará más tarde.')
-  return new EbError(status, `Enable Banking respondió ${status}${detail ? `: ${detail}` : ''}`)
+  // Un 403 «Application does not exist» es la credencial, no el permiso del banco.
+  if ((status === 401 || status === 403) && /jwt|token|signature|application|kid|authorization_not_provided/.test(text))
+    return say('Enable Banking no acepta la credencial: revisa el id de la aplicación y el archivo .pem (Cuentas → Credencial).')
+  if (status === 429 || code === 'ASPSP_RATE_LIMIT_EXCEEDED')
+    return say('El banco limita las consultas (4 al día sin ti delante): se volverá a intentar más tarde.')
+  if (status >= 500 || code === 'ASPSP_ERROR' || code === 'ASPSP_TIMEOUT')
+    return say('El banco o Enable Banking no responden bien ahora mismo. Prueba más tarde.')
+  return new EbError(status, `Enable Banking respondió ${status}: ${raw}`)
 }
 
 export function ebClient(transport: EbTransport) {

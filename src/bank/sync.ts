@@ -36,6 +36,16 @@ export function isDue(link: Pick<BankLink, 'validUntil' | 'lastSyncAt'>, now: nu
   return !link.lastSyncAt || now - link.lastSyncAt >= every
 }
 
+/** Horas entre dos sincronizaciones forzadas a mano: cada lectura gasta del cupo diario del banco. */
+export const MANUAL_EVERY_HOURS = 24
+
+/** ¿Se puede forzar ya la sincronización de esta cuenta? Si no, desde cuándo. */
+export function manualSync(link: Pick<BankLink, 'validUntil' | 'manualSyncAt'>, now: number): { ok: boolean; nextAt?: number } {
+  if (Date.parse(link.validUntil) <= now) return { ok: false }
+  const nextAt = (link.manualSyncAt ?? 0) + MANUAL_EVERY_HOURS * 3_600_000
+  return nextAt <= now ? { ok: true } : { ok: false, nextAt }
+}
+
 export type ConsentState = 'ok' | 'expiring' | 'expired'
 
 /** Estado del permiso del banco: avisa una semana antes de que caduque. */

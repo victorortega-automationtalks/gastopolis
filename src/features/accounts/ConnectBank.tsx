@@ -68,6 +68,10 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
         label: a.existingId ? (accounts.find((x) => x.id === a.existingId)?.name ?? a.name) : a.name,
         on: true,
       }))
+      if (!list.length)
+        throw new Error(
+          `${s.aspsp.name} no ha devuelto ninguna cuenta. Con tu aplicación de Enable Banking en modo restringido solo se leen las cuentas que enlazaste en su panel («Activate by linking accounts»): enlaza allí también esta y vuelve a conectar.`,
+        )
       setOffered(list)
       setPhase('accounts')
     } catch (e) {
@@ -122,6 +126,10 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
 
       {phase === 'pick' && (
         <div className="space-y-3">
+          <p className="text-xs text-ink-muted">
+            Lo que enlazaste en el panel de Enable Banking solo activa tu aplicación: aquí hay que conectar el banco otra vez para que Gastópolis tenga su
+            propio permiso. Elige el mismo banco (y entra con la misma cuenta) que enlazaste allí.
+          </p>
           <div className="flex flex-wrap gap-2">
             <select className="field w-auto" value={country} onChange={(e) => setCountry(e.target.value)} aria-label="País del banco">
               {COUNTRIES.map((c) => (
