@@ -1,25 +1,28 @@
-import { CameraControls, Line, MeshReflectorMaterial, useCursor } from '@react-three/drei'
-import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
+import { CameraControls, MeshReflectorMaterial, useCursor } from '@react-three/drei'
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing'
 import { useEffect, useMemo, useRef, type ComponentRef } from 'react'
 import * as THREE from 'three'
 import { shade } from '../../lib/color'
-import { fmtMoney, fmtMonth } from '../../model/format'
+import { fmtMoney } from '../../model/format'
+import { bucketLabel } from '../../model/ridgeSeries'
 import type { ResolvedQuality, SceneColors } from '../common'
 import { ambientFor } from '../city/ambient'
 import { FogRig, Sky } from '../shared/atmosphere'
 import { LabelLayer, LabelProjector, type LabelSpec } from '../shared/labels'
-import type { RidgeLayout } from './layout'
+import { applyReveal, buildRidge, revealAt } from './geometry'
+import { axisTicks, type RidgeLayout } from './layout'
 
 export interface RidgeHover {
   row: number
-  month: number
+  /** Tramo (día, semana o mes) señalado. */
+  at: number
 }
 
 export interface RidgeCanvasProps {
   layout: RidgeLayout
   hover: RidgeHover | null
-  /** Fila resaltada desde el panel (sin mes concreto). */
+  /** Fila resaltada desde el panel (sin tramo concreto). */
   focusRow: number | null
   quality: ResolvedQuality
   colors: SceneColors
@@ -28,22 +31,39 @@ export interface RidgeCanvasProps {
   frameKey: string
   onHover: (h: RidgeHover | null) => void
   onPick: (h: RidgeHover) => void
+  /** Reproducción: hasta qué tramo (con decimales) ha crecido la cordillera. Null = entera. */
+  cursor?: number | null
 }
 
 const noRaycast = () => null
-const THICK = 0.55
 const isClick = (e: ThreeEvent<MouseEvent>) => e.delta < 5
+const linear = (hex: string) => {
+  const c = new THREE.Color(hex)
+  return { r: c.r, g: c.g, b: c.b }
+}
 
-function ridgeGeometry(profile: number[], width: number, depth: number): THREE.ExtrudeGeometry {
-  const shape = new THREE.Shape()
-  const n = profile.length
-  shape.moveTo(0, 0)
-  profile.forEach((h, i) => shape.lineTo((i / (n - 1)) * width, Math.max(h, 0.05)))
-  shape.lineTo(width, 0)
-  shape.closePath()
-  const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.12, bevelSegments: 2, curveSegments: 1 })
-  g.translate(-width / 2, 0, -depth / 2)
-  return g
+/**
+ * Frente de la ola compartido por todas las crestas: avanza con suavidad hacia su objetivo. Al cambiar los datos
+ * vuelve a empezar desde la izquierda, así la cordillera «se levanta» al entrar.
+ */
+/** Uno para todo el módulo: solo hay una Cordillera a la vez (como el `tmp` de la Ciudad). */
+const WAVE = { front: -1e3, target: 1e3, width: 5 }
+
+function WaveRig({ layout, cursor, frameKey }: { layout: RidgeLayout; cursor: number | null; frameKey: string }) {
+  const w = Math.max(layout.spacingX * 2.2, 5)
+  useEffect(() => {
+    WAVE.front = -layout.width / 2 - 1
+    WAVE.width = w
+  }, [frameKey, layout.width, w])
+  useFrame((_, dt) => {
+    const s = WAVE
+    s.width = w
+    s.target = cursor == null ? layout.width / 2 + w + 1 : cursor * layout.spacingX - layout.width / 2 + w * 0.5
+    // Al retroceder (arrastrar el deslizador hacia atrás) se coloca de golpe; si no, persigue el objetivo.
+    if (s.target < s.front - layout.spacingX * 3) s.front = s.target
+    else s.front += (s.target - s.front) * (1 - Math.exp(-dt * (cursor == null ? 2.6 : 9)))
+  })
+  return null
 }
 
 function Ridge({
@@ -52,6 +72,7 @@ function Ridge({
   layout,
   active,
   dimmed,
+  dark,
   onHover,
   onPick,
 }: {
@@ -60,105 +81,194 @@ function Ridge({
   layout: RidgeLayout
   active: boolean
   dimmed: boolean
+  dark: boolean
   onHover: RidgeCanvasProps['onHover']
   onPick: RidgeCanvasProps['onPick']
 }) {
-  const depth = layout.spacingZ * THICK
-  const geo = useMemo(() => ridgeGeometry(row.profile, layout.width, depth), [row.profile, layout.width, depth])
-  useEffect(() => () => geo.dispose(), [geo])
-  const linePoints = useMemo(
+  const buffers = useMemo(
     () =>
-      row.profile.map(
-        (h, i) => new THREE.Vector3((i / (row.profile.length - 1)) * layout.width - layout.width / 2, Math.max(h, 0.05) + 0.14, depth / 2 + 0.13),
+      buildRidge(
+        row.profile,
+        layout.width,
+        layout.thickness,
+        linear(shade(row.color, dark ? -0.08 : 0)),
+        linear(shade(row.color, dark ? -0.82 : -0.55)),
+        layout.maxH,
       ),
-    [row.profile, layout.width, depth],
+    [row.profile, row.color, layout.width, layout.thickness, layout.maxH, dark],
   )
-  const glow = useMemo(() => new THREE.Color(row.color).multiplyScalar(active ? 3 : dimmed ? 0.5 : 1.8), [row.color, active, dimmed])
-  const monthAt = (e: ThreeEvent<PointerEvent | MouseEvent>) => {
-    const m = Math.round((e.point.x + layout.width / 2) / layout.spacingX)
-    return Math.max(0, Math.min(layout.months.length - 1, m))
-  }
+  const { geo, crestGeo } = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(buffers.positions.slice(), 3))
+    geo.setAttribute('normal', new THREE.BufferAttribute(buffers.normals.slice(), 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(buffers.colors.slice(), 3))
+    geo.setIndex(new THREE.BufferAttribute(buffers.index, 1))
+    const crestGeo = new THREE.BufferGeometry()
+    crestGeo.setAttribute('position', new THREE.BufferAttribute(buffers.crest.positions.slice(), 3))
+    crestGeo.setIndex(new THREE.BufferAttribute(buffers.crest.index, 1))
+    // Volumen con la altura final: la animación no cambia lo que la cámara debe considerar visible.
+    geo.computeBoundingSphere()
+    crestGeo.computeBoundingSphere()
+    return { geo, crestGeo }
+  }, [buffers])
+  useEffect(
+    () => () => {
+      geo.dispose()
+      crestGeo.dispose()
+    },
+    [geo, crestGeo],
+  )
+  const body = useRef<THREE.Mesh>(null)
+  const edge = useRef<THREE.Mesh>(null)
+  const last = useRef(NaN)
+  useFrame(() => {
+    const { front, width } = WAVE
+    if (!body.current || !edge.current || Math.abs(front - last.current) < 1e-3) return
+    last.current = front
+    const pos = body.current.geometry.attributes.position as THREE.BufferAttribute
+    const nor = body.current.geometry.attributes.normal as THREE.BufferAttribute
+    const crest = edge.current.geometry.attributes.position as THREE.BufferAttribute
+    const col = body.current.geometry.attributes.color as THREE.BufferAttribute
+    applyReveal(buffers, front, width, pos.array as Float32Array, nor.array as Float32Array, crest.array as Float32Array, col.array as Float32Array)
+    col.needsUpdate = true
+    pos.needsUpdate = true
+    nor.needsUpdate = true
+    crest.needsUpdate = true
+  })
+
+  // Sin transparencias: atenuar con el color evita que el orden de dibujo cambie al pasar el ratón (parpadeo).
+  const tint = active ? 1.15 : dimmed ? 0.32 : 1
+  const glow = useMemo(() => new THREE.Color(row.color).multiplyScalar(dimmed ? 0.45 : dark ? (active ? 3.2 : 2.1) : 1.15), [row.color, active, dimmed, dark])
+  const at = (e: ThreeEvent<PointerEvent | MouseEvent>) =>
+    Math.max(0, Math.min(layout.frames.length - 1, Math.round((e.point.x + layout.width / 2) / layout.spacingX)))
   return (
     <group position={[0, 0, row.z]}>
       <mesh
+        ref={body}
         geometry={geo}
-        castShadow
-        receiveShadow
         onPointerMove={(e) => {
           e.stopPropagation()
-          onHover({ row: index, month: monthAt(e) })
+          onHover({ row: index, at: at(e) })
         }}
         onPointerOut={() => onHover(null)}
         onClick={(e) => {
           e.stopPropagation()
-          if (isClick(e)) onPick({ row: index, month: monthAt(e) })
+          if (isClick(e)) onPick({ row: index, at: at(e) })
         }}
       >
         <meshStandardMaterial
-          color={shade(row.color, dimmed ? -0.65 : active ? 0 : -0.25)}
+          vertexColors
+          color={new THREE.Color(tint, tint, tint)}
           emissive={row.color}
-          emissiveIntensity={active ? 0.35 : dimmed ? 0.02 : 0.12}
-          roughness={0.45}
-          metalness={0.15}
-          transparent={dimmed}
-          opacity={dimmed ? 0.55 : 1}
+          emissiveIntensity={active ? 0.22 : dimmed ? 0 : dark ? 0.07 : 0.02}
+          // Mate: con brillo, las láminas planas reflejan la luz en ángulo rasante y se ven blanquecinas.
+          roughness={0.92}
+          metalness={0}
         />
       </mesh>
-      <Line points={linePoints} color={glow} lineWidth={active ? 3 : 2} toneMapped={false} raycast={noRaycast} />
+      <mesh ref={edge} geometry={crestGeo} raycast={noRaycast}>
+        <meshBasicMaterial color={glow} toneMapped={false} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
+      </mesh>
     </group>
   )
 }
 
-/** Cursor del mes señalado: columna translúcida a lo ancho y barra brillante en la cresta. */
+/** Destellos que viajan por la cresta de cada fila en la reproducción, en el frente de la ola. */
+function Sparks({ layout, playing }: { layout: RidgeLayout; playing: boolean }) {
+  const mesh = useRef<THREE.InstancedMesh>(null)
+  const tmp = useMemo(() => new THREE.Object3D(), [])
+  const tint = useMemo(() => layout.rows.map((r) => new THREE.Color(r.color).multiplyScalar(4)), [layout.rows])
+  const n = layout.rows.length
+  useFrame(() => {
+    const m = mesh.current
+    if (!m) return
+    const { front, width } = WAVE
+    const x = front - width * 0.45
+    const f = revealAt(x, front, width)
+    layout.rows.forEach((r, i) => {
+      // Altura del perfil en x (interpolada) por lo que ya ha crecido.
+      const t = ((x + layout.width / 2) / layout.width) * (r.profile.length - 1)
+      const k = Math.max(0, Math.min(r.profile.length - 2, Math.floor(t)))
+      const y = (r.profile[k] + ((r.profile[k + 1] ?? r.profile[k]) - r.profile[k]) * Math.min(1, Math.max(0, t - k))) * f
+      tmp.position.set(x, y + 0.12, r.z + layout.thickness / 2 + 0.05)
+      const visible = playing && x > -layout.width / 2 && x < layout.width / 2
+      tmp.scale.setScalar(visible ? 0.32 : 0)
+      tmp.updateMatrix()
+      m.setMatrixAt(i, tmp.matrix)
+      m.setColorAt(i, tint[i])
+    })
+    m.instanceMatrix.needsUpdate = true
+    if (m.instanceColor) m.instanceColor.needsUpdate = true
+  })
+  return (
+    <instancedMesh key={n} ref={mesh} args={[undefined, undefined, n]} raycast={noRaycast}>
+      <sphereGeometry args={[1, 16, 12]} />
+      <meshBasicMaterial toneMapped={false} />
+    </instancedMesh>
+  )
+}
+
+/** Señal del tramo bajo el puntero: una línea en el suelo a lo ancho y una columna de luz en la cresta. */
 function Cursor({ layout, hover }: { layout: RidgeLayout; hover: RidgeHover | null }) {
   if (!hover) return null
   const row = layout.rows[hover.row]
-  const x = hover.month * layout.spacingX - layout.width / 2
-  const h = Math.max(row.heights[hover.month], 0.05)
+  const x = hover.at * layout.spacingX - layout.width / 2
+  const h = Math.max(row.heights[hover.at], 0.05)
+  const c = new THREE.Color(row.color).multiplyScalar(2.6)
   return (
     <group>
-      <mesh position={[x, 0.03, 0]} raycast={noRaycast}>
-        <boxGeometry args={[0.08, 0.02, layout.depth + layout.spacingZ * 2]} />
-        <meshBasicMaterial color={new THREE.Color(row.color).multiplyScalar(2)} toneMapped={false} />
+      <mesh position={[x, 0.08, 0]} raycast={noRaycast}>
+        <boxGeometry args={[0.07, 0.02, layout.depth + layout.spacingZ * 1.6]} />
+        <meshBasicMaterial color={c} toneMapped={false} />
       </mesh>
-      <mesh position={[x, h / 2, row.z + layout.spacingZ * THICK * 0.5 + 0.2]} raycast={noRaycast}>
-        <boxGeometry args={[0.18, h, 0.18]} />
-        <meshBasicMaterial color={new THREE.Color(row.color).multiplyScalar(3)} toneMapped={false} />
+      <mesh position={[x, h / 2, row.z + layout.thickness / 2 + 0.12]} raycast={noRaycast}>
+        <boxGeometry args={[0.14, h, 0.14]} />
+        <meshBasicMaterial color={c} toneMapped={false} />
       </mesh>
     </group>
   )
 }
 
-function Floor({ layout, dark, high }: { layout: RidgeLayout; dark: boolean; high: boolean }) {
+/** Suelo y rejilla de tiempo. Las líneas van separadas del suelo para que no se peleen con él (z-fighting). */
+function Floor({ layout, dark, high, ticks }: { layout: RidgeLayout; dark: boolean; high: boolean; ticks: number[] }) {
   const a = ambientFor(dark)
-  const lines = useMemo(() => layout.months.map((m, i) => ({ x: i * layout.spacingX - layout.width / 2, year: m.endsWith('-01') })), [layout])
-  const span = layout.depth + layout.spacingZ * 2
+  const grid = useMemo(() => {
+    const z0 = -layout.depth / 2 - layout.spacingZ
+    const z1 = layout.depth / 2 + layout.spacingZ
+    const pts: number[] = []
+    for (const i of ticks) {
+      const x = i * layout.spacingX - layout.width / 2
+      pts.push(x, 0, z0, x, 0, z1)
+    }
+    pts.push(-layout.width / 2, 0, z1, layout.width / 2, 0, z1)
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3))
+    return g
+  }, [layout, ticks])
+  useEffect(() => () => grid.dispose(), [grid])
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} position={[0, -0.02, 0]} raycast={noRaycast} receiveShadow>
+      <mesh rotation-x={-Math.PI / 2} raycast={noRaycast}>
         <planeGeometry args={[3000, 3000]} />
         {high ? (
           <MeshReflectorMaterial
             resolution={512}
-            blur={[300, 90]}
-            mixBlur={0.9}
-            mixStrength={dark ? 6 : 2}
-            mirror={0.6}
+            blur={[260, 80]}
+            mixBlur={1}
+            mixStrength={dark ? 3.5 : 1.5}
+            mirror={0.45}
             depthScale={0}
             color={a.ground}
-            metalness={0.4}
-            roughness={0.8}
+            metalness={0.3}
+            roughness={0.85}
           />
         ) : (
           <meshStandardMaterial color={a.ground} roughness={1} />
         )}
       </mesh>
-      {lines.map((l) => (
-        <mesh key={l.x} position={[l.x, 0.01, 0]} raycast={noRaycast}>
-          <boxGeometry args={[l.year ? 0.12 : 0.05, 0.01, span]} />
-          <meshBasicMaterial color={dark ? (l.year ? '#5b6390' : '#262b44') : l.year ? '#8a90aa' : '#c7cbd8'} />
-        </mesh>
-      ))}
+      <lineSegments geometry={grid} position={[0, 0.06, 0]} raycast={noRaycast}>
+        <lineBasicMaterial color={dark ? '#2b3150' : '#c3c8d6'} />
+      </lineSegments>
     </group>
   )
 }
@@ -173,111 +283,120 @@ function Rig({ layout, frameKey }: { layout: RidgeLayout; frameKey: string }) {
     const portrait = size.height > size.width
     if (first.current) {
       first.current = false
-      void c.rotateTo(-0.5, portrait ? 0.85 : 1.02, false)
+      void c.rotateTo(-0.42, portrait ? 0.95 : 1.08, false)
     }
-    const radius = Math.hypot(layout.width / 2, layout.depth / 2 + layout.spacingZ, layout.maxH / 2) * (portrait ? 1.05 : 0.82)
+    const radius = Math.hypot(layout.width / 2, layout.depth / 2 + layout.spacingZ, layout.maxH / 2) * (portrait ? 1.05 : 0.88)
     void c.fitToSphere(new THREE.Sphere(new THREE.Vector3(0, layout.maxH / 3, 0), radius), true)
   }, [frameKey, layout, size.width, size.height])
   return (
-    <CameraControls ref={controls} makeDefault minPolarAngle={0.2} maxPolarAngle={1.45} minDistance={8} maxDistance={600} dollyToCursor smoothTime={0.35} />
+    <CameraControls ref={controls} makeDefault minPolarAngle={0.25} maxPolarAngle={1.42} minDistance={8} maxDistance={600} dollyToCursor smoothTime={0.35} />
   )
 }
 
-function useSpecs({ layout, hover, currency, locale }: Pick<RidgeCanvasProps, 'layout' | 'hover' | 'currency' | 'locale'>): LabelSpec[] {
+function useSpecs(
+  { layout, hover, currency, locale, cursor }: Pick<RidgeCanvasProps, 'layout' | 'hover' | 'currency' | 'locale' | 'cursor'>,
+  ticks: number[],
+): LabelSpec[] {
+  // Mientras se reproduce, los rótulos se recalculan por tramo entero, no a cada fotograma.
+  const step = cursor == null ? null : Math.floor(cursor + 1e-6)
   return useMemo(() => {
     const specs: LabelSpec[] = []
+    const money = (v: number, compact = false) => fmtMoney(v, { currency, locale, compact })
     if (hover) {
       const row = layout.rows[hover.row]
-      const x = hover.month * layout.spacingX - layout.width / 2
       specs.push({
         id: 'focus',
-        pos: [x, row.heights[hover.month] + 0.4, row.z],
+        pos: [hover.at * layout.spacingX - layout.width / 2, row.heights[hover.at] + 0.5, row.z],
         color: row.color,
         icon: row.icon,
         title: row.name,
-        value: fmtMoney(row.values[hover.month], { currency, locale }),
-        sub: fmtMonth(layout.months[hover.month], true),
+        value: money(row.values[hover.at]),
+        sub: bucketLabel(layout.frames[hover.at], layout.bucket, true),
         focus: true,
       })
     }
-    // Rótulo de cada categoría sobre su pico: dice de quién es la cresta y cuándo se disparó.
+    // Cada categoría, sobre su pico (de lo que ya se ve, en la reproducción).
     for (const row of layout.rows) {
-      const peak = row.values.indexOf(Math.max(...row.values))
+      const seen = step == null ? row.values : row.values.slice(0, step + 1)
+      if (!seen.some((v) => v > 0)) continue
+      const peak = seen.indexOf(Math.max(...seen))
       specs.push({
         id: `row:${row.categoryId}`,
-        pos: [peak * layout.spacingX - layout.width / 2, row.heights[peak] + 1.2, row.z],
+        pos: [peak * layout.spacingX - layout.width / 2, row.heights[peak] + 1.1, row.z],
         color: row.color,
         icon: row.icon,
         title: row.name,
-        value: fmtMoney(row.total, { currency, locale, compact: true }),
-        sub: `pico ${fmtMonth(layout.months[peak])}`,
+        value: money(
+          seen.reduce((a, v) => a + v, 0),
+          true,
+        ),
+        sub: `pico ${bucketLabel(layout.frames[peak], layout.bucket)}`,
       })
     }
-    // Meses en el borde delantero (uno de cada dos si no caben).
-    const every = layout.months.length > 14 ? 2 : 1
-    const front = layout.depth / 2 + layout.spacingZ * 0.9
-    layout.months.forEach((m, i) => {
-      if (i % every) return
-      specs.push({ id: `m:${m}`, pos: [i * layout.spacingX - layout.width / 2, 0, front], color: '', title: fmtMonth(m), value: '', axis: true })
-    })
+    const front = layout.depth / 2 + layout.spacingZ * 0.95
+    for (const i of ticks) {
+      specs.push({
+        id: `t:${i}`,
+        pos: [i * layout.spacingX - layout.width / 2, 0, front],
+        color: '',
+        title: bucketLabel(layout.frames[i], layout.bucket),
+        value: '',
+        axis: true,
+      })
+    }
     return specs
-  }, [layout, hover, currency, locale])
+  }, [layout, hover, currency, locale, step, ticks])
 }
 
 export function RidgeCanvas(props: RidgeCanvasProps) {
   const { layout, quality, colors, hover, focusRow } = props
   const high = quality === 'high'
+  const cursor = props.cursor ?? null
   useCursor(hover != null)
-  const specs = useSpecs(props)
+  const ticks = useMemo(() => axisTicks(layout), [layout])
+  const specs = useSpecs(props, ticks)
   const els = useMemo(() => new Map<string, HTMLDivElement>(), [])
   const activeRow = hover?.row ?? focusRow
   return (
     <div className="absolute inset-0">
       <Canvas
-        shadows={high ? 'percentage' : false}
         dpr={high ? [1, 2] : 1}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
-        camera={{ position: [-40, 50, 90], fov: 38, near: 0.5, far: 5000 }}
+        camera={{ position: [-40, 50, 90], fov: 36, near: 0.5, far: 5000 }}
         onPointerMissed={() => props.onHover(null)}
       >
         <Sky dark={colors.dark} />
         <fog attach="fog" args={[ambientFor(colors.dark).horizon, 150, 400]} />
         <FogRig radius={Math.max(layout.width, layout.depth) * 1.5} />
-        <ambientLight intensity={colors.dark ? 0.35 : 0.8} />
-        <hemisphereLight args={[colors.accent2, colors.canvas, colors.dark ? 0.4 : 0.5]} />
-        <directionalLight
-          position={[-30, 80, 60]}
-          intensity={colors.dark ? 1.6 : 2.2}
-          castShadow={high}
-          shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-80}
-          shadow-camera-right={80}
-          shadow-camera-top={80}
-          shadow-camera-bottom={-80}
-          shadow-bias={-0.0004}
-        />
-        <directionalLight position={[60, 30, -60]} intensity={colors.dark ? 0.9 : 0.4} color={colors.accent} />
+        <ambientLight intensity={colors.dark ? 0.32 : 0.75} />
+        <hemisphereLight args={[colors.accent2, colors.canvas, colors.dark ? 0.45 : 0.5]} />
+        <directionalLight position={[-30, 70, 60]} intensity={colors.dark ? 1.5 : 2.1} />
+        {/* Contraluz de color: perfila las crestas contra el cielo. */}
+        <directionalLight position={[40, 25, -80]} intensity={colors.dark ? 1.4 : 0.5} color={colors.accent} />
 
-        <Floor layout={layout} dark={colors.dark} high={high} />
+        <Floor layout={layout} dark={colors.dark} high={high} ticks={ticks} />
+        <WaveRig layout={layout} cursor={cursor} frameKey={props.frameKey} />
         {layout.rows.map((row, i) => (
           <Ridge
-            key={row.categoryId}
+            key={`${row.categoryId}:${row.profile.length}`}
             row={row}
             index={i}
             layout={layout}
             active={activeRow === i}
             dimmed={activeRow != null && activeRow !== i}
+            dark={colors.dark}
             onHover={props.onHover}
             onPick={props.onPick}
           />
         ))}
+        <Sparks layout={layout} playing={cursor != null} />
         <Cursor layout={layout} hover={hover} />
         <LabelProjector specs={specs} els={els} />
         <Rig layout={layout} frameKey={props.frameKey} />
 
         {high && (
           <EffectComposer multisampling={4}>
-            <Bloom mipmapBlur intensity={colors.dark ? 0.8 : 0.25} luminanceThreshold={1} luminanceSmoothing={0.2} />
+            <Bloom mipmapBlur intensity={colors.dark ? 0.75 : 0.22} luminanceThreshold={1} luminanceSmoothing={0.25} />
             <Vignette eskil={false} offset={0.25} darkness={colors.dark ? 0.5 : 0.2} />
           </EffectComposer>
         )}

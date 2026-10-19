@@ -50,6 +50,8 @@ Probado contra el Excel real: 237 movimientos, 3 filas saltadas con su motivo, t
 Rejilla de tarjetas con una mini-Ciudad viva en el centro. KPIs (ingresos, gastos, ahorro neto, tasa de ahorro, proyección de cierre de mes), curva de saldo acumulado, top 5 categorías, anillos de presupuesto, resumen de fugas, progreso de objetivos, próximos cargos recurrentes y racha de días sin gastar. Tarjetas reordenables/ocultables.
 
 ### Ciudad (fase 2)
+Al entrar en una categoría, cada concepto toma un tono propio (`familyColor`: ángulo áureo en OKLCH con tres luminosidades) también dentro de los distritos; en la vista general cada barrio conserva el color de su categoría.
+
 Treemap 3D voxelizado: superficie = importe, altura = nº de movimientos (configurable: media, % de presupuesto, variación), color = categoría o calor. Clic en un bloque → la cámara entra y se subdivide (categoría → subcategoría → concepto → movimiento), como WinDirStat. Breadcrumb, `Esc` para subir, panel lateral sincronizado (hover en la lista ilumina el bloque). `InstancedMesh` para miles de bloques a 60 fps.
 
 **Implementación (fase 2):** la jerarquía (`model/hierarchy.ts`) baja por subcategorías antes de pasar a la siguiente dimensión y siempre termina en movimientos; los ids son rutas, así la navegación sobrevive a cambios de filtro. El layout (`scenes/city/layout.ts`) es un treemap squarify de dos niveles con calles entre distritos; los edificios heredan el color de su barrio con variaciones de tono. Edificios y tejados son `InstancedMesh`; las ventanas salen de un shader en coordenadas de mundo. Los rótulos son DOM proyectado cada fotograma con detección de choques (no `drei/Html`): icono de categoría, importe y % del total.
@@ -60,6 +62,8 @@ Treemap 3D voxelizado: superficie = importe, altura = nº de movimientos (config
 Relieve mes × categoría. Clic en una celda → Ciudad filtrada a ese mes y categoría.
 
 **Implementación:** una cresta extruida por categoría (raíz o subcategoría), perfil con interpolación cúbica monótona (pasa por cada mes sin sobrepasarlo ni bajar de cero), la de más importe al fondo para no tapar a las demás, más de 10 se pliegan en «Otras». Rótulo de cada categoría sobre su pico, meses en el borde, cursor del mes al pasar el ratón y barras por mes en el panel.
+
+**Rediseño (tras probarla en un PC):** agrupación adaptativa por días, semanas o meses (`model/ridgeSeries.ts`; «Auto» según lo que abarquen los datos: un mes de datos se ve por días, no como una cuña de dos puntos). Ancho constante, alturas algo comprimidas en días y semanas para que el alquiler no aplaste el resto. Geometría propia (`scenes/ridge/geometry.ts`) con normales analíticas y color por altura: valles en sombra, cumbres con todo su color, y una cinta luminosa en la cresta. Sin transparencias ni z-fighting (parpadeo). La reproducción es una ola que levanta la cordillera de izquierda a derecha, con destellos en el frente; lo que aún no ha llegado queda en penumbra. Clic en una cresta abre la Ciudad con ese día, semana o mes.
 
 ### Balanza (fase 3)
 Torres de ingresos y gastos apiladas por categoría. Deslizador temporal mensual o acumulado. (El tarro de «Apartado» se quitó: estorbaba más de lo que contaba; lo ahorrado vive en Objetivos.)
@@ -94,6 +98,14 @@ Reglas «el concepto contiene / es / cumple la expresión → categoría», con 
 ### Laboratorio de decisiones (fase 5)
 Palancas (recortar o topar una categoría, cancelar un recurrente, cambio de ingresos, gasto puntual, aportación a objetivo, rentabilidad con interés compuesto, inflación) contra una línea base de tu media real. Proyección a 1/3/5/10 años, «llegas a Vivienda 14 meses antes», escenarios guardados y comparables. Escena 3D «Horizonte»: las proyecciones como cintas que atraviesan los pórticos de los objetivos.
 
+**Implementación:** la línea base es la media de los últimos 6 meses completos (el mes en curso está a medias). Lo que sobra cada mes suma a lo que tienes; los gastos suben con la inflación y los ingresos con su propia subida (supuestos editables). Dos palancas sobre la misma categoría no se suman dos veces. «Invertir» aplica interés compuesto mensual a una parte de lo acumulado. El extra al mes se destina a un objetivo y se calcula cuántos meses antes llega con `goalSooner`; **ese mismo dato** sitúa los pórticos del Horizonte y las marcas del gráfico 2D (antes cada vista usaba una medida distinta y daban fechas distintas). Escenarios guardados en la tabla `scenarios` (Dexie v3) e incluidos en la copia. «Simular» en una suscripción de Fugas abre el Laboratorio con la cancelación puesta. Horizonte: cintas con cortina (shader propio con niebla), vista de lado (hoy a la izquierda, el futuro a la derecha en la niebla); con números rojos el cero sube y la cinta se ve bajar.
+
+### Río (fase 5)
+De dónde viene el dinero y a dónde va (Sankey): ingresos por categoría y lo sacado de ahorros → gastos, cada ahorro o inversión y lo que sobra; si se gasta más de lo que entra, el hueco es una fuente («Gastado de más»). El dinero no lleva etiqueta: cada fuente se reparte entre los destinos en proporción. Tercera columna opcional con los gastos por categoría. Cintas con degradado y estelas de luz animadas (sin animación con «reducir movimiento»). Pantalla propia y tarjeta «Río del mes» en el Inicio. Lógica pura en `model/flow.ts` y `lib/sankey.ts`.
+
+### Reproducción en el tiempo (Ciudad, Cordillera, Balanza)
+Reproductor común (`ui/TimePlayer` + `ui/useTimeline`): día, semana o mes, velocidad 1×/2×/4×; al cambiar de paso se queda en la misma fecha. Fotogramas puros en `model/timeline.ts`. Ciudad: el plano no cambia y cada edificio crece hasta lo gastado en la fecha (`scenes/city/growth.ts`). Cordillera: un plano de recorte (`localClippingEnabled`) descubre la cordillera tras un muro de luz. Balanza: cualquier tramo de fechas (`balanceBetween`), por periodo o acumulado, con escala fija.
+
 ### Movimientos, Categorías, Ajustes (fase 1)
 Tabla virtualizada con orden, filtros globales (periodo, tipo, búsqueda), selección múltiple para recategorizar o borrar con deshacer. Categorías con jerarquía, color, icono, presupuesto, cambio de tipo y fusión al borrar. Ajustes: moneda, inicio de año, tema, calidad 3D, copias, CSV, datos de ejemplo e historial de importaciones.
 
@@ -114,5 +126,5 @@ Decisión: **ejecutable en Windows** y **web app instalada en el iPhone**. Sin A
 2. **Ciudad** — treemap 3D con drill-down y panel lateral. ✅
 3. **Cordillera, Balanza, deslizador temporal, Inicio.** ✅
 4. **Alta rápida, reglas, Objetivos, Detector de fugas.** ✅
-5. **Laboratorio + Horizonte.**
+5. **Laboratorio + Horizonte, Río, reproducción en el tiempo.** ✅
 6. **Distribución (Windows + iPhone, CI)** ✅ · **rendimiento con 10k movimientos, pulido.**

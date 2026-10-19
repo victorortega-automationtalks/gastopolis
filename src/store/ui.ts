@@ -1,9 +1,10 @@
+import type { Lever } from '../model/lab'
 import { create } from 'zustand'
 import { DEFAULT_FILTERS, type Filters } from '../model/period'
 
-export type Route = 'inicio' | 'ciudad' | 'cordillera' | 'balanza' | 'movimientos' | 'objetivos' | 'fugas' | 'laboratorio' | 'categorias' | 'ajustes'
+export type Route = 'inicio' | 'ciudad' | 'cordillera' | 'balanza' | 'rio' | 'movimientos' | 'objetivos' | 'fugas' | 'laboratorio' | 'categorias' | 'ajustes'
 
-export const ROUTES: Route[] = ['inicio', 'ciudad', 'cordillera', 'balanza', 'movimientos', 'objetivos', 'fugas', 'laboratorio', 'categorias', 'ajustes']
+export const ROUTES: Route[] = ['inicio', 'ciudad', 'cordillera', 'balanza', 'rio', 'movimientos', 'objetivos', 'fugas', 'laboratorio', 'categorias', 'ajustes']
 
 function routeFromHash(): Route {
   const h = (typeof location !== 'undefined' ? location.hash : '').replace(/^#\/?/, '') as Route
@@ -31,6 +32,10 @@ interface UIState {
   editMovement: (id: string | null) => void
   toast: (text: string, tone?: Toast['tone'], action?: Toast['action']) => void
   dismissToast: (id: number) => void
+  /** Palanca que otra pantalla manda al Laboratorio (p. ej., «Simular» una suscripción desde Fugas). */
+  labSeed: Lever | null
+  seedLab: (lever: Lever) => void
+  clearLabSeed: () => void
 }
 
 let toastSeq = 0
@@ -55,6 +60,12 @@ export const useUI = create<UIState>((set, get) => ({
     setTimeout(() => get().dismissToast(id), action ? 7000 : 3500)
   },
   dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
+  labSeed: null,
+  seedLab: (labSeed) => {
+    set({ labSeed })
+    get().navigate('laboratorio')
+  },
+  clearLabSeed: () => set({ labSeed: null }),
 }))
 
 if (typeof window !== 'undefined') {

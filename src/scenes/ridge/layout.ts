@@ -1,4 +1,6 @@
+import type { Bucket, BucketedSeries } from '../../model/ridgeSeries'
 import type { CategorySeries } from '../../model/series'
+import type { Frame } from '../../model/timeline'
 
 /**
  * Perfil suave que pasa por todos los puntos sin sobrepasarlos (interpolación cúbica monótona de Fritsch–Carlson):
@@ -43,17 +45,20 @@ export function smoothProfile(values: number[], steps = 8): number[] {
 export interface RidgeRow extends CategorySeries {
   /** Posición en profundidad: la fila de más importe va al fondo para no tapar a las demás. */
   z: number
-  /** Alturas en unidades de escena, una por mes. */
+  /** Alturas en unidades de escena, una por tramo. */
   heights: number[]
-  /** Perfil suavizado (steps puntos por mes). */
+  /** Perfil suavizado (steps puntos por tramo). */
   profile: number[]
 }
 
 export interface RidgeLayout {
-  months: string[]
+  bucket: Bucket
+  frames: Frame[]
   rows: RidgeRow[]
   spacingX: number
   spacingZ: number
+  /** Grosor de cada cresta (en z). */
+  thickness: number
   steps: number
   width: number
   depth: number
@@ -62,41 +67,61 @@ export interface RidgeLayout {
 
 export interface RidgeOptions {
   maxRows?: number
-  spacingX?: number
+  /** Ancho total al que se estira la cordillera, tenga los tramos que tenga. */
+  targetWidth?: number
   spacingZ?: number
   maxH?: number
-  steps?: number
 }
 
-/** Coloca una cresta por categoría: x = mes, altura = importe, z = categoría. Las que sobran se pliegan en «Otras». */
-export function layoutRidge(
-  data: { months: string[]; rows: CategorySeries[]; max: number },
-  { maxRows = 10, spacingX = 4, spacingZ = 6, maxH = 24, steps = 8 }: RidgeOptions = {},
-): RidgeLayout {
+/** Puntos de perfil por tramo: con pocos tramos (meses) la curva necesita más para ser suave. */
+const STEPS: Record<Bucket, number> = { month: 10, week: 6, day: 4 }
+
+/**
+ * Escala de alturas algo comprimida en días y semanas: el día del alquiler no debe aplastar al resto. Los meses,
+ * lineales. Los importes exactos los dan los rótulos y el panel.
+ */
+const GAMMA: Record<Bucket, number> = { month: 1, week: 0.8, day: 0.6 }
+
+/**
+ * Coloca una cresta por categoría: x = tiempo, altura = importe, z = categoría. Las que sobran se pliegan en «Otras».
+ * El ancho es siempre parecido: muchos días quedan juntos y pocos meses, separados.
+ */
+export function layoutRidge(data: BucketedSeries, { maxRows = 9, targetWidth = 72, spacingZ = 6, maxH = 22 }: RidgeOptions = {}): RidgeLayout {
   let rows = data.rows
+  const n = data.frames.length
   if (rows.length > maxRows) {
     const rest = rows.slice(maxRows - 1)
-    const values = data.months.map((_, i) => rest.reduce((a, r) => a + r.values[i], 0))
+    const values = data.frames.map((_, i) => rest.reduce((a, r) => a + r.values[i], 0))
     rows = [
       ...rows.slice(0, maxRows - 1),
       { categoryId: 'otras', name: `Otras (${rest.length})`, color: '#8b8fa8', icon: 'CircleDashed', values, total: values.reduce((a, b) => a + b, 0) },
     ]
   }
   const max = Math.max(1e-9, ...rows.flatMap((r) => r.values))
-  const n = rows.length
-  const width = Math.max(1, data.months.length - 1) * spacingX
+  const spacingX = n > 1 ? Math.min(6, Math.max(0.9, targetWidth / (n - 1))) : targetWidth
+  const steps = STEPS[data.bucket]
+  const k = rows.length
   return {
-    months: data.months,
+    bucket: data.bucket,
+    frames: data.frames,
     spacingX,
     spacingZ,
+    thickness: spacingZ * 0.5,
     steps,
-    width,
-    depth: Math.max(1, n - 1) * spacingZ,
+    width: Math.max(1, n - 1) * spacingX,
+    depth: Math.max(1, k - 1) * spacingZ,
     maxH,
     rows: rows.map((r, i) => {
-      const heights = r.values.map((v) => (v / max) * maxH)
+      const heights = r.values.map((v) => Math.pow(v / max, GAMMA[data.bucket]) * maxH)
       // La cámara mira desde +z: la fila 0 (la de más importe) queda al fondo, en z negativo.
-      return { ...r, z: (i - (n - 1) / 2) * spacingZ, heights, profile: smoothProfile(heights, steps) }
+      return { ...r, z: (i - (k - 1) / 2) * spacingZ, heights, profile: smoothProfile(heights, steps) }
     }),
   }
+}
+
+/** Tramos con rótulo en el eje: unos 9 repartidos, y siempre el último. */
+export function axisTicks(layout: Pick<RidgeLayout, 'frames'>): number[] {
+  const n = layout.frames.length
+  const every = Math.max(1, Math.ceil(n / 9))
+  return layout.frames.map((_, i) => i).filter((i) => i % every === 0 || i === n - 1)
 }

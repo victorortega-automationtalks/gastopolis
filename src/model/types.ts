@@ -1,3 +1,4 @@
+import type { Assumptions, Lever } from './lab'
 /** Naturaleza de un movimiento. Las transferencias mueven dinero entre bolsillos propios (ahorro, inversión). */
 export type Kind = 'expense' | 'income' | 'transfer'
 
@@ -121,6 +122,15 @@ export interface Settings {
   lastBackupAt?: number
 }
 
+/** Escenario guardado del Laboratorio: palancas y supuestos con nombre. */
+export interface Scenario {
+  id: string
+  name: string
+  levers: Lever[]
+  assumptions: Assumptions
+  createdAt: number
+}
+
 export interface Backup {
   app: 'gastopolis'
   version: 1
@@ -133,4 +143,5 @@ export interface Backup {
   goals: Goal[]
   batches: ImportBatch[]
   decisions?: LeakDecision[]
+  scenarios?: Scenario[]
 }

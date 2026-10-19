@@ -91,6 +91,12 @@ export interface LayoutOptions {
   heightBy: HeightBy
   colorBy: ColorBy
   size?: number
+  /**
+   * Dentro de una categoría: cada edificio con su propio color también dentro de los distritos (los conceptos se
+   * distinguen entre sí; el distrito conserva el color de la subcategoría en su plataforma). En la vista general,
+   * no: cada barrio es de su color para reconocer las categorías.
+   */
+  distinctInside?: boolean
 }
 
 interface Wrap {
@@ -111,7 +117,7 @@ function wrap(node: CityNode, depth: number): Wrap {
  * Treemap de dos niveles: los hijos del nodo visible son distritos (con calles entre ellos) y sus hijos,
  * edificios. Superficie = importe; altura según `heightBy`.
  */
-export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 100 }: LayoutOptions): CityLayout {
+export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 100, distinctInside = false }: LayoutOptions): CityLayout {
   const tree = hierarchy<Wrap>(wrap(view, depth), (w) => w.children).sum((w) => (w.children ? 0 : Math.max(w.node.value, 1e-6)))
   // Calles con sitio para dos carriles (los coches del decorado) y acera en cada distrito.
   const street = size * 0.024
@@ -151,9 +157,14 @@ export function layoutCity(view: CityNode, { depth, heightBy, colorBy, size = 10
     const k = siblingsSeen.get(district) ?? 0
     siblingsSeen.set(district, k + 1)
     const h = heightBy === 'flat' ? 2.5 : H_MIN + (H_MAX - H_MIN) * Math.sqrt(metric(node) / maxMetric)
-    // Cada barrio es de su color (el del distrito); los edificios vecinos se distinguen con un leve cambio de tono.
-    const base = district >= 0 ? districts[district].color : node.color
-    const color = colorBy === 'heat' ? heatColor(Math.sqrt(node.value / maxValue)) : shade(base, k % 3 === 0 ? 0 : k % 3 === 1 ? -0.14 : 0.12)
+    // Dentro de un barrio, todos de su color con un leve cambio de tono entre vecinos. Sueltos (al entrar en una
+    // categoría), cada uno con el suyo: la jerarquía ya les dio tonos bien distintos.
+    const color =
+      colorBy === 'heat'
+        ? heatColor(Math.sqrt(node.value / maxValue))
+        : district >= 0 && !distinctInside
+          ? shade(districts[district].color, k % 3 === 0 ? 0 : k % 3 === 1 ? -0.14 : 0.12)
+          : node.color
     const r = rect(l)
     return { node, ...r, h, color, district, towers: splitTowers(r.w, r.d, h, node.id, heightBy === 'flat') }
   })

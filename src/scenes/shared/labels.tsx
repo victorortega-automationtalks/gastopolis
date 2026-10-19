@@ -41,12 +41,18 @@ export function LabelProjector({ specs, els }: { specs: LabelSpec[]; els: Map<st
       // Dentro de la pantalla aunque el punto quede cerca del borde.
       const x = Math.min(Math.max(cx - w / 2, 4), size.width - w - 4)
       const r = { x, y: s.focus ? cy - h - 6 : cy - h / 2, w, h }
-      const hit = placed.some((p) => r.x < p.x + p.w + 4 && r.x + r.w + 4 > p.x && r.y < p.y + p.h + 2 && r.y + r.h + 2 > p.y)
+      // Histéresis: uno que ya se ve aguanta un poco de solape antes de ocultarse, así no parpadea con cada
+      // movimiento mínimo de la cámara.
+      const shown = el.style.visibility === 'visible'
+      const m = shown ? -6 : 4
+      const hit = placed.some((p) => r.x < p.x + p.w + m && r.x + r.w + m > p.x && r.y < p.y + p.h + m / 2 && r.y + r.h + m / 2 > p.y)
       if (hit && !s.focus) {
         el.style.visibility = 'hidden'
         continue
       }
-      placed.push(r)
+      // El de foco (bajo el puntero) va por encima y no echa a los demás: si no, al mover el ratón aparecen y
+      // desaparecen todos.
+      if (!s.focus) placed.push(r)
       el.style.visibility = 'visible'
       el.style.transform = `translate3d(${r.x.toFixed(1)}px, ${r.y.toFixed(1)}px, 0)`
     }

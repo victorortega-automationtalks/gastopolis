@@ -155,3 +155,46 @@ describe('torres', () => {
     for (const b of l.buildings) expect(Math.max(...b.towers.map((t) => t.h))).toBeCloseTo(b.h)
   })
 })
+
+describe('colores al entrar en un barrio', () => {
+  it('los conceptos de una categoría tienen colores distintos; las categorías conservan el suyo', () => {
+    const root = buildHierarchy(movements, categories, ['category', 'concept'], 'Gastos')
+    const gas = root.children!.find((c) => c.categoryId === 'gas')!
+    expect(gas.color).toBe('#ff0000')
+    const concepts = gas.children!.map((c) => c.color)
+    expect(concepts).toHaveLength(2)
+    expect(concepts[0]).toBe('#ff0000')
+    expect(concepts[1]).not.toBe('#ff0000')
+    // Al entrar en Gasolina, los edificios toman esos colores.
+    const l = layoutCity(gas, { depth: 1, heightBy: 'value', colorBy: 'category', size: 100 })
+    expect(l.buildings.map((b) => b.color)).toEqual(concepts)
+    // Dentro de una categoría con subcategorías, los conceptos de cada distrito también se distinguen.
+    const ocio = root.children!.find((c) => c.categoryId === 'ocio')!
+    const inside = layoutCity(ocio, { depth: 2, heightBy: 'value', colorBy: 'category', size: 100, distinctInside: true })
+    const rest = inside.buildings.filter((b) => b.district >= 0 && inside.districts[b.district].node.categoryId === 'rest')
+    expect(rest.length).toBeGreaterThan(0)
+    const general = layoutCity(root, { depth: 2, heightBy: 'value', colorBy: 'category', size: 100 })
+    const ocioDistrict = general.districts.findIndex((d) => d.node.categoryId === 'ocio')
+    // En la vista general, los edificios de un barrio llevan el color del barrio (con matices).
+    expect(general.buildings.filter((b) => b.district === ocioDistrict).every((b) => b.color !== '#000000')).toBe(true)
+  })
+})
+
+describe('ciudad en el tiempo', () => {
+  it('cada edificio crece con lo gastado hasta la fecha', async () => {
+    const { growthIndex } = await import('./growth')
+    const root = buildHierarchy(movements, categories, ['category', 'concept'], 'Gastos')
+    const gas = root.children!.find((c) => c.categoryId === 'gas')!
+    const l = layoutCity(gas, { depth: 1, heightBy: 'value', colorBy: 'category', size: 100 })
+    const at = growthIndex(l, 'value')
+    const repsol = l.buildings.findIndex((b) => b.node.label === 'Repsol')
+    const cepsa = l.buildings.findIndex((b) => b.node.label === 'Cepsa')
+    const enero = at('2025-01-31')
+    expect(enero.value[repsol]).toBe(60)
+    expect(enero.ratio[repsol]).toBeCloseTo(60 / 115)
+    expect(enero.ratio[cepsa]).toBe(1)
+    expect(at('2024-12-31').total).toBe(0)
+    expect(at('2025-12-31').ratio[repsol]).toBe(1)
+    expect(growthIndex(l, 'count')('2025-01-31').ratio[repsol]).toBe(0.5)
+  })
+})

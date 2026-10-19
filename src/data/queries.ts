@@ -10,4 +10,5 @@ export const queries = {
   rulesByPriority: () => db.rules.orderBy('priority').toArray(),
   goals: () => db.goals.toArray(),
   decisions: () => db.decisions.toArray(),
+  scenarios: () => db.scenarios.orderBy('createdAt').toArray(),
 }

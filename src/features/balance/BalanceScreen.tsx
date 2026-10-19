@@ -3,17 +3,18 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { useCategories, useMovements, useSettings } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
 import { applyFilters } from '../../model/aggregate'
-import { balanceSnapshot, type BalanceSeg } from '../../model/balance'
-import { fmtMoney, fmtPercent } from '../../model/format'
+import { balanceBetween, type BalanceSeg } from '../../model/balance'
+import { fmtDate, fmtMoney, fmtPercent } from '../../model/format'
 import { today } from '../../model/period'
-import { monthsOf } from '../../model/series'
-import { KINDS } from '../../model/types'
+import { frameIndexOf, type Frame } from '../../model/timeline'
+import { KINDS, type Movement } from '../../model/types'
 import type { BalancePick } from '../../scenes/balance/BalanceCanvas'
 import { useQuality, useSceneColors } from '../../scenes/common'
 import { useUI } from '../../store/ui'
 import { Button } from '../../ui/components/primitives'
 import { CategoryIcon } from '../../ui/icons'
-import { TimeScrubber, type ScrubMode } from '../../ui/TimeScrubber'
+import { TimePlayer, type TimeMode } from '../../ui/TimePlayer'
+import { useTimeline } from '../../ui/useTimeline'
 import { useOpenInCity } from '../city/openInCity'
 
 const BalanceCanvas = lazy(() => import('../../scenes/balance/BalanceCanvas').then((m) => ({ default: m.BalanceCanvas })))
@@ -27,9 +28,7 @@ export function BalanceScreen() {
   const quality = useQuality()
   const colors = useSceneColors()
   const openInCity = useOpenInCity()
-  const [mode, setMode] = useState<ScrubMode>('month')
-  const [picked, setIndex] = useState<number | null>(null)
-  const [playing, setPlaying] = useState(false)
+  const [mode, setMode] = useState<TimeMode>('period')
   const [hovered, setHovered] = useState<string | null>(null)
 
   // La balanza mira los tres tipos a la vez: los filtros de periodo y búsqueda sí aplican.
@@ -37,33 +36,31 @@ export function BalanceScreen() {
     () => applyFilters(movements, { ...filters, kinds: KINDS }, categories, today(), settings.fiscalYearStart),
     [movements, filters, categories, settings.fiscalYearStart],
   )
-  const months = useMemo(() => monthsOf(scoped), [scoped])
+  // Arranca en el último periodo con ingresos: el mes en curso suele estar a medias.
   const lastWithIncome = useMemo(() => {
-    const withIncome = new Set(scoped.filter((m) => m.kind === 'income').map((m) => m.date.slice(0, 7)))
-    for (let i = months.length - 1; i >= 0; i--) if (withIncome.has(months[i])) return i
-    return months.length - 1
-  }, [scoped, months])
-  const index = Math.min(picked ?? lastWithIncome, Math.max(0, months.length - 1))
-  const snapshot = useMemo(() => balanceSnapshot(scoped, categories, months, index, mode), [scoped, categories, months, index, mode])
+    const dates = scoped.filter((m) => m.kind === 'income').map((m) => m.date)
+    const lastIncome = dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : null
+    return (frames: Frame[]) => (lastIncome ? frameIndexOf(frames, lastIncome) : frames.length - 1)
+  }, [scoped])
+  const tl = useTimeline(scoped, 'month', lastWithIncome)
+  const first = tl.frames[0]
+  const snapshot = useMemo(
+    () => (tl.frame ? balanceBetween(scoped, categories, mode === 'period' ? tl.frame.from : first.from, tl.frame.to) : null),
+    [scoped, categories, tl.frame, mode, first],
+  )
 
-  // Escala fija para todo el periodo: así un mes ligero se ve ligero de verdad al lado de uno pesado.
-  const scaleMax = useMemo(() => {
-    let max = 1
-    for (let i = 0; i < months.length; i++) {
-      const s = balanceSnapshot(scoped, categories, months, i, mode)
-      max = Math.max(max, s.incomeTotal, s.expenseTotal)
-    }
-    return max
-  }, [scoped, categories, months, mode])
+  // Escala fija para toda la reproducción: así un periodo ligero se ve ligero de verdad al lado de uno pesado.
+  const scaleMax = useMemo(() => periodMax(scoped, tl.frames, mode), [scoped, tl.frames, mode])
 
   const money = (v: number, signed = false) => fmtMoney(v, { currency: settings.currency, locale: settings.locale, signed })
-  const pick = (p: BalancePick) => p.seg.categoryId !== 'otras' && openInCity(p.seg.categoryId, p.side, mode === 'month' ? snapshot.month : undefined)
-  const empty = months.length === 0
+  const pick = (p: BalancePick) =>
+    p.seg.categoryId !== 'otras' && openInCity(p.seg.categoryId, p.side, mode === 'period' && tl.step === 'month' ? snapshot?.month : undefined)
+  const empty = !snapshot
 
   return (
     <div className="flex h-full min-h-0 flex-col lg:flex-row">
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        {!empty && (
+        {snapshot && (
           <div className="absolute inset-x-0 top-0 bottom-[8.5rem] md:bottom-[4.5rem] lg:bottom-0">
             <Suspense fallback={<div className="flex h-full items-center justify-center text-ink-muted">Cargando…</div>}>
               <BalanceCanvas
@@ -84,7 +81,7 @@ export function BalanceScreen() {
           </div>
         )}
 
-        {!empty && (
+        {snapshot && (
           <div className="pointer-events-none absolute top-0 left-0 p-3">
             <div
               className={clsx(
@@ -105,9 +102,22 @@ export function BalanceScreen() {
           </div>
         )}
 
-        {!empty && (
-          <div className="absolute inset-x-3 bottom-[9.5rem] md:bottom-[5.5rem] lg:bottom-4 lg:left-1/2 lg:w-[34rem] lg:-translate-x-1/2">
-            <TimeScrubber months={months} index={index} onIndex={setIndex} playing={playing} onPlaying={setPlaying} mode={mode} onMode={setMode} />
+        {snapshot && (
+          <div className="absolute inset-x-3 bottom-[9.5rem] md:bottom-[5.5rem] lg:bottom-4 lg:left-1/2 lg:w-[36rem] lg:-translate-x-1/2">
+            <TimePlayer
+              frames={tl.frames}
+              index={tl.index}
+              onIndex={tl.setIndex}
+              playing={tl.playing}
+              onPlaying={tl.setPlaying}
+              step={tl.step}
+              onStep={tl.setStep}
+              speed={tl.speed}
+              onSpeed={tl.setSpeed}
+              mode={mode}
+              onMode={setMode}
+              cumulativeFrom={first ? fmtDate(first.from) : undefined}
+            />
           </div>
         )}
 
@@ -119,7 +129,7 @@ export function BalanceScreen() {
         )}
       </div>
 
-      {!empty && (
+      {snapshot && (
         <aside className="absolute inset-x-0 bottom-16 z-10 max-h-[4.5rem] overflow-y-auto border-t border-line bg-surface-solid md:bottom-0 lg:static lg:max-h-none lg:w-96 lg:border-t-0 lg:border-l lg:bg-surface lg:backdrop-blur-xl">
           <div className="space-y-5 p-4">
             <div className="grid grid-cols-3 gap-3">
@@ -214,4 +224,25 @@ function SegList({
       </ul>
     </section>
   )
+}
+
+/** Lo más que pesa un platillo en toda la reproducción (en acumulado, al final; por periodos, el periodo más cargado). */
+function periodMax(movements: Movement[], frames: Frame[], mode: TimeMode): number {
+  if (!frames.length) return 1
+  const income = new Float64Array(frames.length)
+  const expense = new Float64Array(frames.length)
+  for (const m of movements) {
+    if (m.kind === 'transfer') continue
+    const i = frameIndexOf(frames, m.date)
+    ;(m.kind === 'income' ? income : expense)[i] += Math.abs(m.amount)
+  }
+  let max = 1
+  let accI = 0
+  let accE = 0
+  for (let i = 0; i < frames.length; i++) {
+    accI = mode === 'cumulative' ? accI + income[i] : income[i]
+    accE = mode === 'cumulative' ? accE + expense[i] : expense[i]
+    max = Math.max(max, accI, accE)
+  }
+  return max
 }

@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { applyFilters } from '../model/aggregate'
 import { DEFAULT_SETTINGS } from '../model/defaults'
 import { today } from '../model/period'
-import type { Category, Goal, LeakDecision, Movement, Rule, Settings } from '../model/types'
+import type { Category, Goal, LeakDecision, Movement, Rule, Scenario, Settings } from '../model/types'
 import { useUI } from '../store/ui'
 import { queries } from './queries'
 
@@ -41,6 +41,11 @@ export function useGoals() {
 
 export function useDecisions() {
   return useLiveQuery(queries.decisions, []) ?? EMPTY_D
+}
+
+const EMPTY_S: Scenario[] = []
+export function useScenarios() {
+  return useLiveQuery(queries.scenarios, []) ?? EMPTY_S
 }
 
 export function useBatches() {

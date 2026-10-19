@@ -1,5 +1,6 @@
 import clsx from 'clsx'
-import { Check, ChevronDown, CircleSlash, EyeOff, ListFilter, RotateCcw, ShieldCheck, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, CircleSlash, EyeOff, FlaskConical, ListFilter, RotateCcw, ShieldCheck, Trash2, X } from 'lucide-react'
+import { newId } from '../../lib/id'
 import { useState } from 'react'
 import { useCategoryMap, useMovements, useSettings } from '../../data/hooks'
 import { decideLeak, deleteMovements, restoreMovements, undecideLeak } from '../../data/repo'
@@ -113,6 +114,7 @@ function LeakCard({ leak: l, status, money }: { leak: Leak; status?: LeakStatus;
   const toast = useUI((s) => s.toast)
   const navigate = useUI((s) => s.navigate)
   const setFilters = useUI((s) => s.setFilters)
+  const seedLab = useUI((s) => s.seedLab)
   const catMap = useCategoryMap()
   const { movements } = useMovements()
   const decide = async (s: LeakStatus, msg: string) => {
@@ -166,6 +168,16 @@ function LeakCard({ leak: l, status, money }: { leak: Leak; status?: LeakStatus;
                 <Button size="sm" variant="danger" onClick={() => decide('cancel', `Marcado para cancelar: ${money(l.amount)}/año`)}>
                   <CircleSlash size={13} /> La cancelo
                 </Button>
+                {l.type === 'subscription' && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => seedLab({ id: newId(), type: 'cancel', conceptKey: l.id.slice(4), label: l.title, monthly: l.amount / 12 })}
+                    title="Ver en el Laboratorio qué cambia si la cancelas"
+                  >
+                    <FlaskConical size={13} /> Simular
+                  </Button>
+                )}
               </>
             )}
             {l.type === 'duplicate' && (

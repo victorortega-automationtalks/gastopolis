@@ -13,6 +13,7 @@ import { FogRig, Sky } from '../shared/atmosphere'
 import { LabelLayer, LabelProjector, type LabelSpec } from '../shared/labels'
 import { CityDecor } from './CityDecor'
 import { buildDecor } from './decor'
+import type { Growth } from './growth'
 import { baseY, PLINTH_H, type Block, type CityLayout } from './layout'
 import { createWindowMaterial } from './windowMaterial'
 
@@ -35,6 +36,8 @@ export interface CityCanvasProps {
   onHover: (id: string | null) => void
   onSelect: (node: CityNode | null) => void
   onEnter: (node: CityNode) => void
+  /** Reproducción temporal: cuánto ha crecido cada edificio en la fecha mostrada. Null = ciudad completa. */
+  growth?: Growth | null
 }
 
 const ROOF = 0.14
@@ -59,7 +62,8 @@ function Buildings({
   onHover,
   onSelect,
   onEnter,
-}: Pick<CityCanvasProps, 'layout' | 'selectedId' | 'hoveredId' | 'colors' | 'onHover' | 'onSelect' | 'onEnter'>) {
+  growth,
+}: Pick<CityCanvasProps, 'layout' | 'selectedId' | 'hoveredId' | 'colors' | 'onHover' | 'onSelect' | 'onEnter' | 'growth'>) {
   const body = useRef<THREE.InstancedMesh>(null!)
   const roof = useRef<THREE.InstancedMesh>(null!)
   // Una instancia por torre; `owner` dice a qué edificio pertenece cada una (para clics y colores).
@@ -79,6 +83,8 @@ function Buildings({
   const material = useMemo(() => createWindowMaterial(colors.dark ? '#ffd7a1' : '#fff3d6', colors.dark ? 1.25 : 0.35), [colors.dark])
   const roofMat = useMemo(() => new THREE.MeshBasicMaterial({ toneMapped: false }), [])
   const anim = useRef({ start: -1, running: true })
+  // Altura que se está pintando de cada torre: en la reproducción se acerca suavemente a la del fotograma.
+  const heights = useRef(new Float32Array(towers.length))
   const delays = useMemo(() => {
     const max = layout.size * 0.71
     return towers.map(({ b, t }) => (Math.hypot(b.x + t.dx, b.z + t.dz) / max) * 0.45)
@@ -89,6 +95,11 @@ function Buildings({
   useLayoutEffect(() => {
     anim.current = { start: -1, running: true }
   }, [layout])
+
+  // Cada fotograma nuevo vuelve a poner en marcha la animación hacia las alturas de esa fecha.
+  useLayoutEffect(() => {
+    anim.current.running = true
+  }, [growth])
 
   useLayoutEffect(() => {
     if (!body.current || !roof.current) return
@@ -108,17 +119,26 @@ function Buildings({
     if (roof.current.instanceColor) roof.current.instanceColor.needsUpdate = true
   }, [layout, towers, selectedId, hoveredId, colors.dark])
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, dt) => {
     const a = anim.current
     if (!a.running || !body.current || !roof.current) return
     if (a.start < 0) a.start = clock.elapsedTime
-    const t = reducedMotion() ? 1e9 : clock.elapsedTime - a.start
+    const reduced = reducedMotion()
+    const t = reduced ? 1e9 : clock.elapsedTime - a.start
+    const follow = 1 - Math.exp(-dt * 9)
+    const cur = heights.current
     let done = true
     towers.forEach(({ b, t: tower }, i) => {
       const p = Math.min(1, Math.max(0, (t - delays[i]) / GROW_SECONDS))
       if (p < 1) done = false
+      const target = tower.h * easeOut(p) * (growth ? growth.ratio[owner[i]] : 1)
+      // Durante la entrada se sigue la curva tal cual; en la reproducción, se persigue el objetivo con suavidad.
+      let h = p < 1 || reduced ? target : cur[i] + (target - cur[i]) * follow
+      if (Math.abs(target - h) < 0.01) h = target
+      else done = false
+      cur[i] = h
       const y0 = baseY(b)
-      const h = Math.max(0.001, tower.h * easeOut(p))
+      h = Math.max(0.001, h)
       const x = b.x + tower.dx
       const z = b.z + tower.dz
       tmp.position.set(x, y0, z)
@@ -230,8 +250,25 @@ function useLabelSpecs({
   locale,
   total,
   iconFor,
-}: Pick<CityCanvasProps, 'layout' | 'hoveredId' | 'selectedId' | 'quality' | 'currency' | 'locale' | 'total' | 'iconFor'>): LabelSpec[] {
+  growth,
+}: Pick<CityCanvasProps, 'layout' | 'hoveredId' | 'selectedId' | 'quality' | 'currency' | 'locale' | 'total' | 'iconFor' | 'growth'>): LabelSpec[] {
   return useMemo(() => {
+    // En la reproducción, cada rótulo dice lo que lleva hasta la fecha (los distritos, la suma de sus edificios).
+    const shown = new Map<string, number>()
+    if (growth) {
+      layout.buildings.forEach((b, i) => {
+        shown.set(b.node.id, growth.value[i])
+        if (b.district >= 0) {
+          const d = layout.districts[b.district].node.id
+          shown.set(d, (shown.get(d) ?? 0) + growth.value[i])
+        }
+      })
+    }
+    const valueOf = (n: CityNode) => (growth ? (shown.get(n.id) ?? 0) : n.value)
+    const pct = (n: CityNode) => {
+      const base = growth ? growth.total : total
+      return base > 0 ? fmtPercent(valueOf(n) / base, locale) : undefined
+    }
     const area = layout.size * layout.size
     const max = quality === 'high' ? 24 : 12
     const withDistricts = layout.districts.length > 0
@@ -244,8 +281,8 @@ function useLabelSpecs({
         pos: withDistricts ? [b.x, PLINTH_H, b.z + b.d / 2] : [b.x, baseY(b) + b.h + 0.4, b.z],
         color: b.color,
         title: b.node.label,
-        value: fmtMoney(b.node.value, { currency, locale }),
-        sub: total > 0 ? fmtPercent(b.node.value / total, locale) : undefined,
+        value: fmtMoney(valueOf(b.node), { currency, locale }),
+        sub: pct(b.node),
         icon: iconFor(b.node),
       }))
     const focusId = hoveredId ?? selectedId
@@ -256,14 +293,14 @@ function useLabelSpecs({
         pos: [focus.x, baseY(focus) + focus.h + 0.3, focus.z],
         color: focus.color,
         title: focus.node.label,
-        value: fmtMoney(focus.node.value, { currency, locale }),
+        value: fmtMoney(valueOf(focus.node), { currency, locale }),
         sub: focus.node.movement ? fmtDate(focus.node.movement.date) : `${focus.node.count} ${focus.node.count === 1 ? 'movimiento' : 'movimientos'}`,
         icon: iconFor(focus.node),
         focus: true,
       })
     }
     return fixed
-  }, [layout, hoveredId, selectedId, quality, currency, locale, total, iconFor])
+  }, [layout, hoveredId, selectedId, quality, currency, locale, total, iconFor, growth])
 }
 
 function Rig({ layout, frameKey, viewId }: { layout: CityLayout; frameKey: string; viewId: string }) {

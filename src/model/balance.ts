@@ -1,6 +1,5 @@
-import { monthKey } from './period'
 import { rootIndex } from './series'
-import type { Category, Movement } from './types'
+import type { Category, ISODate, Movement } from './types'
 
 export type BalanceMode = 'month' | 'cumulative'
 
@@ -35,13 +34,20 @@ const MAX_SEGMENTS = 7
  */
 export function balanceSnapshot(movements: Movement[], categories: Category[], months: string[], index: number, mode: BalanceMode): BalanceSnapshot {
   const month = months[Math.min(Math.max(index, 0), months.length - 1)] ?? ''
-  const inRange = mode === 'month' ? (k: string) => k === month : (k: string) => k >= months[0] && k <= month
+  const from = `${mode === 'month' ? month : months[0]}-01`
+  return balanceBetween(movements, categories, from, `${month}-31`)
+}
+
+/** Lo mismo para cualquier tramo de fechas [from, to]: un día, una semana, un mes o lo acumulado. */
+export function balanceBetween(movements: Movement[], categories: Category[], from: ISODate, to: ISODate): BalanceSnapshot {
+  const month = to.slice(0, 7)
+  const inRange = (d: ISODate) => d >= from && d <= to
   const root = rootIndex(categories)
   const byId = new Map(categories.map((c) => [c.id, c]))
   const sums = { income: new Map<string, number>(), expense: new Map<string, number>() }
   let saved = 0
   for (const m of movements) {
-    if (!inRange(monthKey(m.date))) continue
+    if (!inRange(m.date)) continue
     if (m.kind === 'transfer') {
       saved -= m.amount
       continue

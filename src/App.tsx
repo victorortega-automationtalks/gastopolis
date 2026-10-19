@@ -15,6 +15,8 @@ import { CURRENT_PHASE, navItem } from './ui/nav'
 const CityScreen = lazy(() => import('./features/city/CityScreen').then((m) => ({ default: m.CityScreen })))
 const RidgeScreen = lazy(() => import('./features/ridge/RidgeScreen').then((m) => ({ default: m.RidgeScreen })))
 const BalanceScreen = lazy(() => import('./features/balance/BalanceScreen').then((m) => ({ default: m.BalanceScreen })))
+const LabScreen = lazy(() => import('./features/lab/LabScreen').then((m) => ({ default: m.LabScreen })))
+const RiverScreen = lazy(() => import('./features/river/RiverScreen').then((m) => ({ default: m.RiverScreen })))
 const GoalsScreen = lazy(() => import('./features/goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })))
 const LeaksScreen = lazy(() => import('./features/leaks/LeaksScreen').then((m) => ({ default: m.LeaksScreen })))
 const DashboardScreen = lazy(() => import('./features/dashboard/DashboardScreen').then((m) => ({ default: m.DashboardScreen })))
@@ -69,6 +71,12 @@ function Screen({ route }: { route: Route }) {
           <BalanceScreen />
         </Suspense>
       )
+    case 'rio':
+      return (
+        <Suspense fallback={<Loading />}>
+          <RiverScreen />
+        </Suspense>
+      )
     case 'objetivos':
       return (
         <Suspense fallback={<Loading />}>
@@ -79,6 +87,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <Suspense fallback={<Loading />}>
           <LeaksScreen />
+        </Suspense>
+      )
+    case 'laboratorio':
+      return (
+        <Suspense fallback={<Loading />}>
+          <LabScreen />
         </Suspense>
       )
     case 'movimientos':
