@@ -19,6 +19,7 @@ const LabScreen = lazy(() => import('./features/lab/LabScreen').then((m) => ({ d
 const RiverScreen = lazy(() => import('./features/river/RiverScreen').then((m) => ({ default: m.RiverScreen })))
 const GoalsScreen = lazy(() => import('./features/goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })))
 const LeaksScreen = lazy(() => import('./features/leaks/LeaksScreen').then((m) => ({ default: m.LeaksScreen })))
+const ReportsScreen = lazy(() => import('./features/reports/ReportsScreen').then((m) => ({ default: m.ReportsScreen })))
 const DashboardScreen = lazy(() => import('./features/dashboard/DashboardScreen').then((m) => ({ default: m.DashboardScreen })))
 
 function Loading() {
@@ -93,6 +94,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <Suspense fallback={<Loading />}>
           <LabScreen />
+        </Suspense>
+      )
+    case 'informes':
+      return (
+        <Suspense fallback={<Loading />}>
+          <ReportsScreen />
         </Suspense>
       )
     case 'movimientos':

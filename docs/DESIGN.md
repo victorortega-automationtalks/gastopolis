@@ -137,3 +137,14 @@ Decisión: **ejecutable en Windows** y **web app instalada en el iPhone**. Sin A
 - **Gráficos propios** (`ui/charts`) en lugar de Recharts: columnas agrupadas con línea en la misma escala y líneas con marcas. Escalas y colocación de etiquetas puras con tests. JS+CSS de 778 a 660 KB comprimidos; fuentes solo latín (de 351 a 230 KB).
 - **Pulido:** frase del ahorro única (`savingsPhrase`: «Gastas un X % más de lo que entra» si el balance es negativo); etiquetas del eje x que no se cortan por los bordes ni se pisan.
 - Lo que queda de los bloqueos al entrar en una escena 3D es crear el contexto WebGL y compilar shaders (la primera vez).
+
+7. **Informes en PDF, Excel y CSV.** ✅
+
+### Notas de la fase 7
+
+- **Doce informes** (`model/reports`): resumen, evolución mensual, por categoría (con subcategorías y presupuesto), categorías en el tiempo (tabla cruzada por mes, trimestre o año según la duración), por concepto, comparativa con el año anterior, presupuestos, suscripciones y cargos fijos, objetivos, fugas, escenarios del Laboratorio y listado de movimientos; más el «informe completo» con todos. Se elige periodo, categorías (y tipos en el listado) y formato.
+- **Un documento, tres salidas.** Cada informe es un `ReportDoc` neutro (indicadores, columnas, ranking, tablas y texto, con valores sin formatear y el tipo de cada columna). `pdf.ts`, `sheet.ts` (Excel y CSV) y la vista previa lo pintan cada uno a su manera. Los cálculos son los de las pantallas (`totals`, `goalProgress`, `detectRecurring`, `detectLeaks`, `project`…): un informe nunca da otra cifra que la app.
+- **PDF propio, sin librerías** (`lib/pdf`): Helvetica y Helvetica-Bold (dos de las 14 fuentes estándar, no se incrustan) en WinAnsi, con sus métricas de Adobe para medir y alinear; flujos comprimidos con `CompressionStream`. La maqueta pone cabecera y pie con «Página n de N», portada con índice en el informe completo, tarjetas de indicadores, columnas y barras con las reglas de los gráficos de la app, y tablas que continúan en la página siguiente repitiendo la cabecera. Los números nunca se encogen; el texto largo parte línea. Pesa 5,6 KB comprimido.
+- **Excel**: una hoja por informe, importes como números con formato de moneda, fechas como fechas, porcentajes como porcentajes y autofiltro en las hojas de una sola tabla. **CSV** para Excel en español: «;», coma decimal y BOM.
+- **Guardar en Windows**: los binarios van por `save_binary_file`, con los bytes en el cuerpo de la llamada (sin JSON) y el nombre en una cabecera; el «Guardar como» sigue siendo nativo y la web no recibe permiso para escribir archivos.
+- Con 12.000 movimientos: los doce informes, 0,1 s; el PDF completo (263 páginas), 1,2 s; el Excel, 0,7 s.
