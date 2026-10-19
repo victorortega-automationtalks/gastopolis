@@ -1,5 +1,6 @@
 import { db } from '../data/db'
 import { applyBankSync, bankFallbacks, createAccount, updateBankLink } from '../data/repo'
+import { errorMessage } from '../lib/errors'
 import { newId } from '../lib/id'
 import { isoOf } from '../model/period'
 import { compileRules } from '../model/rules'
@@ -96,8 +97,8 @@ export async function syncAccount(accountId: string): Promise<SyncOutcome> {
     return { account: account.name, added: plan.added.length, linked: plan.linked.length, transfers: pairs.length }
   } catch (e) {
     const expired = e instanceof EbError && e.expired
-    await updateBankLink(accountId, { lastError: (e as Error).message, ...(expired ? { validUntil: new Date().toISOString() } : {}) })
-    return { account: account.name, added: 0, linked: 0, transfers: 0, error: (e as Error).message }
+    await updateBankLink(accountId, { lastError: errorMessage(e), ...(expired ? { validUntil: new Date().toISOString() } : {}) })
+    return { account: account.name, added: 0, linked: 0, transfers: 0, error: errorMessage(e) }
   } finally {
     busy.delete(accountId)
   }

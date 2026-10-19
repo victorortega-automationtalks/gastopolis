@@ -39,6 +39,10 @@ pub struct BankResponse {
 
 /// Token de la API: cabecera con el id de la aplicación, válido una hora, firmado con RS256.
 pub fn sign_jwt(app_id: &str, key_pem: &str, now: u64) -> Result<String, String> {
+    // Tolerante con cómo se haya guardado el archivo: saltos de línea de Windows, BOM o espacios alrededor.
+    let key_pem = key_pem.trim_start_matches('\u{feff}').replace("\r\n", "\n").replace('\r', "\n");
+    let key_pem = key_pem.trim();
+    let app_id = app_id.trim();
     let key = RsaPrivateKey::from_pkcs8_pem(key_pem)
         .or_else(|_| RsaPrivateKey::from_pkcs1_pem(key_pem))
         .map_err(|_| "El archivo .pem no es una clave privada RSA válida".to_string())?;
@@ -184,6 +188,9 @@ mod tests {
         let verifier = VerifyingKey::<Sha256>::new(key.to_public_key());
         assert!(verifier.verify(format!("{}.{}", parts[0], parts[1]).as_bytes(), &sig).is_ok());
         assert!(sign_jwt("app", "no es una clave", 0).is_err());
+        // El mismo archivo con saltos de línea de Windows, BOM y espacios también vale.
+        let windows = format!("\u{feff}  {}  ", pem.replace('\n', "\r\n"));
+        assert!(sign_jwt("app-123", &windows, 1_700_000_000).is_ok());
     }
 
     #[test]

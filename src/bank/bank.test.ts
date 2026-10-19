@@ -237,6 +237,7 @@ describe('cliente de Enable Banking', () => {
   it('traduce los errores: credencial mala, permiso caducado, límite del banco', async () => {
     const fail = (status: number, body: object) => ebClient(async () => ({ status, body: JSON.stringify(body) })).aspsps('ES')
     await expect(fail(401, { error: 'UNAUTHORIZED', message: 'Invalid JWT signature' })).rejects.toThrow(/credencial/)
+    await expect(fail(403, { message: 'Application is not active' })).rejects.toThrow(/Activate by linking accounts/)
     // Respuesta real de la API con un id de aplicación que no existe.
     await expect(fail(403, { code: 403, message: 'Application does not exist' })).rejects.toThrow(/credencial/)
     const expired = await fail(401, { error: 'EXPIRED_SESSION', message: 'Session expired' }).catch((e: EbError) => e)

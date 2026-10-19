@@ -84,6 +84,12 @@ function explain(status: number, body: string): EbError {
     detail = body.slice(0, 200)
   }
   const text = `${code} ${detail}`.toLowerCase()
+  // Aplicación registrada pero sin activar: hay que enlazar alguna cuenta en el panel («Activate by linking accounts»).
+  if (/not active|inactive|not activated|is not enabled|restricted/.test(text))
+    return new EbError(
+      status,
+      'Tu aplicación de Enable Banking aún no está activa. En su panel pulsa «Activate by linking accounts» y enlaza al menos un banco (paso 4 del tutorial); después vuelve a probar.',
+    )
   // Va primero: un 403 «Application does not exist» es la credencial, no el permiso del banco.
   if ((status === 401 || status === 403) && /jwt|token|signature|application|kid/.test(text))
     return new EbError(status, 'Enable Banking no acepta la credencial: revisa el id de la aplicación y el archivo .pem (Cuentas → Enable Banking).')

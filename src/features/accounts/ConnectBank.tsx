@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Aspsp, EbSession } from '../../bank/enablebanking'
 import { authorize, listBanks, offeredAccounts, saveConnection, syncAccount, type OfferedAccount, type SyncOutcome } from '../../bank/run'
 import { queries } from '../../data/queries'
+import { errorMessage } from '../../lib/errors'
 import { openExternal } from '../../platform'
 import { useUI } from '../../store/ui'
 import { Button, Field, Modal } from '../../ui/components/primitives'
@@ -70,7 +71,7 @@ export function ConnectBank({ open, onClose, renew }: { open: boolean; onClose: 
       setOffered(list)
       setPhase('accounts')
     } catch (e) {
-      setError((e as Error).message)
+      setError(errorMessage(e))
       setPhase(renew ? 'auth' : 'pick')
     }
   }

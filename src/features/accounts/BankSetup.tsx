@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { DEFAULT_REDIRECT, listBanks } from '../../bank/run'
 import { useBankSecret } from '../../data/hooks'
 import { saveBankSecret } from '../../data/repo'
+import { errorMessage } from '../../lib/errors'
 import { openExternal } from '../../platform'
 import { useUI } from '../../store/ui'
 import { Button, Field, Modal } from '../../ui/components/primitives'
@@ -92,7 +93,7 @@ export function BankSetup({ open, onClose, onReady }: { open: boolean; onClose: 
       toast('Enable Banking configurado')
       onReady?.()
     } catch (e) {
-      setResult({ ok: false, text: (e as Error).message })
+      setResult({ ok: false, text: errorMessage(e) })
     } finally {
       setTesting(false)
     }

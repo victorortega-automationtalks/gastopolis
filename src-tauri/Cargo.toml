@@ -1,6 +1,6 @@
 [package]
 name = "gastopolis"
-version = "0.10.1"
+version = "0.10.2"
 description = "Gastópolis: tu dinero como una ciudad en 3D, sin salir de tu ordenador"
 authors = ["Gastópolis"]
 license = ""
