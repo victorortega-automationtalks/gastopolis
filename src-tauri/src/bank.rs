@@ -154,7 +154,8 @@ pub async fn bank_auth_window(app: tauri::AppHandle, url: String, redirect: Stri
         // Algunos bancos (Revolut) autorizan en una ventana emergente y la página espera a que termine. Se abre como
         // ventana hija con las mismas reglas: solo https y la vuelta del banco se recoge también desde ella.
         .on_new_window(move |url, features| {
-            if url.scheme() != "https" {
+            // Muchas webs abren la emergente en blanco al pulsar y le ponen la dirección después (así no la bloquean).
+            if !(url.scheme() == "https" || url.scheme() == "about") {
                 return tauri::webview::NewWindowResponse::Deny;
             }
             let n = popups.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -172,12 +173,13 @@ pub async fn bank_auth_window(app: tauri::AppHandle, url: String, redirect: Stri
                     let _ = tx.send(Some(u.to_string()));
                     return false;
                 }
-                u.scheme() == "https" || u.as_str() == "about:blank"
+                u.scheme() == "https" || u.scheme() == "about"
             })
             .build();
             match built {
                 Ok(window) => tauri::webview::NewWindowResponse::Create { window },
-                Err(_) => tauri::webview::NewWindowResponse::Deny,
+                // Si no se puede crear la nuestra, mejor la emergente normal del sistema que bloquear la entrada.
+                Err(_) => tauri::webview::NewWindowResponse::Allow,
             }
         })
         .build()
