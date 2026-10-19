@@ -2,9 +2,23 @@ import type { Lever } from '../model/lab'
 import { create } from 'zustand'
 import { DEFAULT_FILTERS, type Filters } from '../model/period'
 
-export type Route = 'inicio' | 'ciudad' | 'cordillera' | 'balanza' | 'rio' | 'movimientos' | 'objetivos' | 'fugas' | 'laboratorio' | 'categorias' | 'ajustes'
+export type Route =
+  'inicio' | 'ciudad' | 'cordillera' | 'balanza' | 'rio' | 'movimientos' | 'objetivos' | 'fugas' | 'laboratorio' | 'categorias' | 'informes' | 'ajustes'
 
-export const ROUTES: Route[] = ['inicio', 'ciudad', 'cordillera', 'balanza', 'rio', 'movimientos', 'objetivos', 'fugas', 'laboratorio', 'categorias', 'ajustes']
+export const ROUTES: Route[] = [
+  'inicio',
+  'ciudad',
+  'cordillera',
+  'balanza',
+  'rio',
+  'movimientos',
+  'objetivos',
+  'fugas',
+  'laboratorio',
+  'categorias',
+  'informes',
+  'ajustes',
+]
 
 function routeFromHash(): Route {
   const h = (typeof location !== 'undefined' ? location.hash : '').replace(/^#\/?/, '') as Route

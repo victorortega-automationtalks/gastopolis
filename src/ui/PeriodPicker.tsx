@@ -7,9 +7,11 @@ import { type Period } from '../model/period'
 import { useUI } from '../store/ui'
 import { periodLabel, PRESETS } from './periodLabel'
 
-export function PeriodPicker() {
-  const period = useUI((s) => s.filters.period)
+/** Selector de periodo. Sin props, el de la barra superior (filtro global); con `value`/`onChange`, uno propio. */
+export function PeriodPicker({ value, onChange }: { value?: Period; onChange?: (p: Period) => void } = {}) {
+  const globalPeriod = useUI((s) => s.filters.period)
   const setFilters = useUI((s) => s.setFilters)
+  const period = value ?? globalPeriod
   const { movements } = useMovements()
   const settings = useSettings()
   const years = useMemo(() => yearsWithData(movements), [movements])
@@ -23,7 +25,7 @@ export function PeriodPicker() {
     return () => window.removeEventListener('pointerdown', onDown)
   }, [open])
 
-  const set = (p: Period) => setFilters({ period: p })
+  const set = (p: Period) => (onChange ? onChange(p) : setFilters({ period: p }))
 
   return (
     <div ref={ref} className="relative">

@@ -1,4 +1,18 @@
-import { Building2, FlaskConical, LayoutDashboard, ListOrdered, Mountain, Radar, Scale, Settings, Shapes, Target, Waves, type LucideIcon } from 'lucide-react'
+import {
+  Building2,
+  FileText,
+  FlaskConical,
+  LayoutDashboard,
+  ListOrdered,
+  Mountain,
+  Radar,
+  Scale,
+  Settings,
+  Shapes,
+  Target,
+  Waves,
+  type LucideIcon,
+} from 'lucide-react'
 import type { Route } from '../store/ui'
 
 export interface NavItem {
@@ -62,6 +76,14 @@ export const NAV: NavItem[] = [
   { route: 'movimientos', label: 'Movimientos', icon: ListOrdered, phase: 1, filters: true, blurb: '' },
   { route: 'categorias', label: 'Categorías', icon: Shapes, phase: 1, filters: false, blurb: '' },
   {
+    route: 'informes',
+    label: 'Informes',
+    icon: FileText,
+    phase: 7,
+    filters: false,
+    blurb: 'Informes del periodo que elijas en PDF, Excel o CSV: resumen, categorías, presupuestos, objetivos…',
+  },
+  {
     route: 'objetivos',
     label: 'Objetivos',
     icon: Target,
@@ -90,11 +112,11 @@ export const NAV: NavItem[] = [
 
 export const NAV_GROUPS: { label: string; routes: Route[] }[] = [
   { label: 'Explorar', routes: ['inicio', 'ciudad', 'cordillera', 'balanza', 'rio'] },
-  { label: 'Gestionar', routes: ['movimientos', 'categorias'] },
+  { label: 'Gestionar', routes: ['movimientos', 'categorias', 'informes'] },
   { label: 'Planificar', routes: ['objetivos', 'fugas', 'laboratorio'] },
 ]
 
 export const navItem = (r: Route) => NAV.find((n) => n.route === r)!
 
 /** Fase hasta la que hay pantallas construidas. */
-export const CURRENT_PHASE = 6
+export const CURRENT_PHASE = 7

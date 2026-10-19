@@ -14,6 +14,11 @@ import { detectRecurring } from './recurring'
 import { seriesByBucket } from './ridgeSeries'
 import { budgetStatus, monthProjection, noSpendStreak } from './insights'
 import { buildFrames } from './timeline'
+import { buildReports } from './reports/build'
+import { REPORTS } from './reports/catalog'
+import { reportsToPdf } from './reports/pdf'
+import { reportsToXlsx } from './reports/sheet'
+import { DEFAULT_SETTINGS } from './defaults'
 
 /**
  * Rendimiento con 12.000 movimientos en 8 años y 900 comercios. Los límites son holgados (la máquina de CI es lenta
@@ -54,4 +59,35 @@ describe('rendimiento con 12.000 movimientos', () => {
     if (import.meta.env.PERF) console.table(timings.map(([n, ms]) => ({ cálculo: n, ms: Math.round(ms * 10) / 10 })))
     for (const [name, ms] of timings) expect(ms, name).toBeLessThan(1500)
   })
+
+  it('el informe completo (todo, en PDF y Excel) se genera en segundos', async () => {
+    const t: [string, number][] = []
+    let t0 = performance.now()
+    const { docs, period } = buildReports(
+      REPORTS.map((r) => r.id),
+      {
+        movements,
+        categories,
+        goals: [],
+        decisions: [],
+        scenarios: [],
+        settings: DEFAULT_SETTINGS,
+        period: { preset: 'all' },
+        periodLabel: 'Todo',
+        categoryIds: [],
+        kinds: ['expense', 'income', 'transfer'],
+        today: asOf,
+      },
+    )
+    t.push(['informes (los 12)', performance.now() - t0])
+    const bundle = { title: 'Informe completo', period, generatedAt: new Date(), currency: 'EUR', locale: 'es-ES', docs }
+    t0 = performance.now()
+    const pdf = await reportsToPdf(bundle)
+    t.push([`PDF (${(pdf.length / 1e6).toFixed(1)} MB)`, performance.now() - t0])
+    t0 = performance.now()
+    reportsToXlsx(bundle)
+    t.push(['Excel', performance.now() - t0])
+    if (import.meta.env.PERF) console.table(t.map(([n, ms]) => ({ informe: n, ms: Math.round(ms) })))
+    for (const [name, ms] of t) expect(ms, name).toBeLessThan(name === 'informes (los 12)' ? 1500 : 6000)
+  }, 30000)
 })

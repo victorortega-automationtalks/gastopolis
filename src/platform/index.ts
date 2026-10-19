@@ -17,16 +17,20 @@ export const isNative = runtime !== 'web'
 export type SaveResult = 'saved' | 'shared' | 'cancelled'
 
 /**
- * Guarda un archivo generado por la app. Windows: «Guardar como». Navegador: en móvil, hoja de compartir
- * (Archivos, Drive, WhatsApp…) si se puede; si no, descarga.
+ * Guarda un archivo generado por la app (texto, o binario como un PDF o un Excel). Windows: «Guardar como».
+ * Navegador: en móvil, hoja de compartir (Archivos, Drive, WhatsApp…) si se puede; si no, descarga.
  */
-export async function saveFile(fileName: string, text: string, mime: string): Promise<SaveResult> {
+export async function saveFile(fileName: string, content: string | Uint8Array, mime: string): Promise<SaveResult> {
   if (runtime === 'tauri') {
     const { invoke } = await import('@tauri-apps/api/core')
-    const saved = await invoke<boolean>('save_text_file', { fileName, contents: text })
+    const saved =
+      typeof content === 'string'
+        ? await invoke<boolean>('save_text_file', { fileName, contents: content })
+        : // Binario: los bytes van tal cual en el cuerpo de la llamada (sin pasar por JSON) y el nombre en una cabecera.
+          await invoke<boolean>('save_binary_file', content, { headers: { 'x-file-name': encodeURIComponent(fileName) } })
     return saved ? 'saved' : 'cancelled'
   }
-  const file = new File([text], fileName, { type: `${mime};charset=utf-8` })
+  const file = new File([content as BlobPart], fileName, { type: typeof content === 'string' ? `${mime};charset=utf-8` : mime })
   if (isTouchDevice() && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: fileName })
