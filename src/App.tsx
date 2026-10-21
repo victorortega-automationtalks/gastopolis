@@ -20,6 +20,7 @@ const LabScreen = lazy(() => import('./features/lab/LabScreen').then((m) => ({ d
 const RiverScreen = lazy(() => import('./features/river/RiverScreen').then((m) => ({ default: m.RiverScreen })))
 const GoalsScreen = lazy(() => import('./features/goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })))
 const LeaksScreen = lazy(() => import('./features/leaks/LeaksScreen').then((m) => ({ default: m.LeaksScreen })))
+const CalendarScreen = lazy(() => import('./features/calendar/CalendarScreen').then((m) => ({ default: m.CalendarScreen })))
 const SortScreen = lazy(() => import('./features/sort/SortScreen').then((m) => ({ default: m.SortScreen })))
 const AccountsScreen = lazy(() => import('./features/accounts/AccountsScreen').then((m) => ({ default: m.AccountsScreen })))
 const ReportsScreen = lazy(() => import('./features/reports/ReportsScreen').then((m) => ({ default: m.ReportsScreen })))
@@ -97,6 +98,12 @@ function Screen({ route }: { route: Route }) {
       return (
         <Suspense fallback={<Loading />}>
           <LabScreen />
+        </Suspense>
+      )
+    case 'calendario':
+      return (
+        <Suspense fallback={<Loading />}>
+          <CalendarScreen />
         </Suspense>
       )
     case 'clasificar':

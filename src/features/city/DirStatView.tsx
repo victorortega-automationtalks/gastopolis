@@ -6,14 +6,25 @@ import { withAlpha } from '../../lib/color'
 import { fmtDate, fmtMoney } from '../../model/format'
 import type { CityNode } from '../../model/hierarchy'
 import { shownDate } from '../../model/payday'
-import { cushionLayout, leafAt, renderCushions, type DsLayout } from '../../scenes/dirstat/layout'
+import { cushionLayout, leafAt, renderCushions, TREELIST_COLORS, windirstatColor, type DsLayout } from '../../scenes/dirstat/layout'
 
 /**
  * Modo WinDirStat: arriba el árbol (como las carpetas, con barra de proporción, porcentaje, importe y movimientos), a
  * la derecha las categorías (como la lista de extensiones) y abajo el treemap con relieve, donde cada movimiento es un
  * bloque del color de su categoría. Seleccionar en un sitio lo marca en el otro.
  */
-export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; onZoom: (n: CityNode) => void; onOpenMovement: (id: string) => void }) {
+export function DirStatView({
+  root,
+  view,
+  onZoom,
+  onOpenMovement,
+}: {
+  /** Todo lo que se explora: los colores salen de aquí para que no cambien al entrar en una carpeta. */
+  root: CityNode
+  view: CityNode
+  onZoom: (n: CityNode) => void
+  onOpenMovement: (id: string) => void
+}) {
   const settings = useSettings()
   const catMap = useCategoryMap()
   const money = (v: number) => fmtMoney(v, { currency: settings.currency, locale: settings.locale })
@@ -29,12 +40,23 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
     setSelected(null)
   }
 
+  // Como WinDirStat con las extensiones: la categoría que más suma lleva el primer color de su paleta, la segunda el
+  // segundo… y de la 13.ª en adelante, todas el mismo.
+  const rank = useMemo(() => {
+    const acc = new Map<string, number>()
+    const walk = (n: CityNode) => {
+      if (n.movement) acc.set(n.movement.categoryId, (acc.get(n.movement.categoryId) ?? 0) + n.value)
+      n.children?.forEach(walk)
+    }
+    walk(root)
+    return new Map([...acc].sort((a, b) => b[1] - a[1]).map(([id], i) => [id, windirstatColor(i)]))
+  }, [root])
   const colorOf = useMemo(() => {
     return (n: CityNode) => {
       const id = n.movement?.categoryId ?? n.categoryId
-      return (id && catMap.get(id)?.color) || n.color
+      return (id && rank.get(id)) || windirstatColor(12)
     }
-  }, [catMap])
+  }, [rank])
 
   // Padres y última fecha de cada nodo, para abrir el camino hasta una hoja y para la columna «Último».
   const { parents, lastDate } = useMemo(() => {
@@ -94,13 +116,13 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
   const selectedNode = selected ? (selected === view.id ? view : findDeep(view, selected)) : null
 
   return (
-    <div className="flex h-full min-h-0 flex-col text-sm">
-      <div className="flex min-h-0 flex-[0_0_44%] border-b border-line-strong">
+    <div className="dirstat flex h-full min-h-0 flex-col text-[12px]">
+      <div className="flex min-h-0 flex-[0_0_44%] border-b border-[var(--ds-line-strong)]">
         {/* Árbol */}
         <div className="min-w-0 flex-1 overflow-auto">
-          <table className="w-full min-w-[46rem] border-collapse text-[13px]">
-            <thead className="sticky top-0 z-[1] bg-surface-solid text-left text-xs text-ink-muted">
-              <tr className="[&>th]:border-r [&>th]:border-b [&>th]:border-line [&>th]:px-2 [&>th]:py-1.5 [&>th]:font-medium">
+          <table className="w-full min-w-[46rem] border-collapse">
+            <thead className="sticky top-0 z-[1] bg-[var(--ds-bg)] text-left">
+              <tr className="[&>th]:border-r [&>th]:border-b [&>th]:border-[var(--ds-line-strong)] [&>th]:px-2 [&>th]:py-1 [&>th]:font-normal">
                 <th>Nombre</th>
                 <th className="w-32">Proporción</th>
                 <th className="w-24 text-right">Porcentaje</th>
@@ -115,7 +137,6 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
                 const open = expanded.has(n.id)
                 const pct = parent ? n.value / (parent.value || 1) : 1
                 const isSel = selected === n.id
-                const color = colorOf(n)
                 const Icon = hasKids ? (open ? FolderOpen : Folder) : FileText
                 return (
                   <tr
@@ -124,14 +145,14 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
                     onClick={() => setSelected(n.id)}
                     onDoubleClick={() => (hasKids ? onZoom(n) : n.movement && onOpenMovement(n.movement.id))}
                     className={clsx(
-                      'cursor-default select-none [&>td]:border-r [&>td]:border-line [&>td]:px-2 [&>td]:py-[3px]',
-                      isSel ? 'bg-accent/25 text-ink' : 'hover:bg-surface-2',
+                      'cursor-default select-none [&>td]:px-2 [&>td]:py-[2px]',
+                      isSel ? 'bg-[var(--ds-sel)] text-[var(--ds-sel-ink)]' : 'hover:bg-[var(--ds-hover)]',
                     )}
                   >
                     <td className="max-w-0">
                       <div className="flex items-center gap-1 truncate" style={{ paddingLeft: depth * 16 }}>
                         <button
-                          className={clsx('shrink-0 rounded p-0.5 text-ink-faint hover:text-ink', !hasKids && 'invisible')}
+                          className={clsx('shrink-0 rounded p-0.5 opacity-70 hover:opacity-100', !hasKids && 'invisible')}
                           onClick={(e) => {
                             e.stopPropagation()
                             const next = new Set(expanded)
@@ -143,20 +164,31 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
                         >
                           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                         </button>
-                        <Icon size={15} className={clsx('shrink-0', hasKids ? 'text-warn' : '')} style={hasKids ? undefined : { color }} />
+                        <Icon
+                          size={15}
+                          className="shrink-0"
+                          style={
+                            hasKids
+                              ? { color: 'var(--ds-folder)', fill: 'var(--ds-folder)', fillOpacity: 0.35 }
+                              : { color: isSel ? undefined : 'var(--ds-faint)' }
+                          }
+                        />
                         <span className="truncate">{n.label}</span>
-                        {n.children && n.children.length > 500 && open && <span className="text-xs text-ink-faint">(500 de {n.children.length})</span>}
+                        {n.children && n.children.length > 500 && open && <span className="opacity-70">(500 de {n.children.length})</span>}
                       </div>
                     </td>
                     <td>
-                      <div className="h-3 overflow-hidden rounded-[2px] bg-surface-2">
-                        <div className="h-full" style={{ width: `${pct * 100}%`, background: withAlpha(color, 0.85) }} />
+                      {/* «Proporción» como en WinDirStat: un color por profundidad, la barra sangrada según el nivel. */}
+                      <div className="h-3.5" style={{ marginLeft: Math.min(depth, 6) * 6 }}>
+                        <div className="h-full" style={{ background: depthTrack(depth) }}>
+                          <div className="h-full" style={{ width: `${pct * 100}%`, background: depthColor(depth) }} />
+                        </div>
                       </div>
                     </td>
-                    <td className="num text-right text-ink-muted">{(pct * 100).toFixed(2).replace('.', ',')} %</td>
-                    <td className="num text-right">{money(n.value)}</td>
-                    <td className="num text-right text-ink-muted">{n.count.toLocaleString('es-ES')}</td>
-                    <td className="num text-right text-ink-faint">{lastDate.get(n.id) ? fmtDate(lastDate.get(n.id)!) : ''}</td>
+                    <td className="text-right tabular-nums">{(pct * 100).toFixed(2).replace('.', ',')} %</td>
+                    <td className="text-right tabular-nums">{money(n.value)}</td>
+                    <td className="text-right tabular-nums">{n.count.toLocaleString('es-ES')}</td>
+                    <td className="text-right tabular-nums">{lastDate.get(n.id) ? fmtDate(lastDate.get(n.id)!) : ''}</td>
                   </tr>
                 )
               })}
@@ -165,10 +197,10 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
         </div>
 
         {/* Categorías, como la lista de extensiones */}
-        <div className="hidden w-80 shrink-0 overflow-auto border-l border-line-strong md:block">
-          <table className="w-full border-collapse text-[13px]">
-            <thead className="sticky top-0 bg-surface-solid text-left text-xs text-ink-muted">
-              <tr className="[&>th]:border-r [&>th]:border-b [&>th]:border-line [&>th]:px-2 [&>th]:py-1.5 [&>th]:font-medium">
+        <div className="hidden w-80 shrink-0 overflow-auto border-l border-[var(--ds-line-strong)] md:block">
+          <table className="w-full border-collapse">
+            <thead className="sticky top-0 bg-[var(--ds-bg)] text-left">
+              <tr className="[&>th]:border-r [&>th]:border-b [&>th]:border-[var(--ds-line-strong)] [&>th]:px-2 [&>th]:py-1 [&>th]:font-normal">
                 <th>Categoría</th>
                 <th className="w-12">Color</th>
                 <th className="text-right">Importe</th>
@@ -177,14 +209,14 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
             </thead>
             <tbody>
               {legend.map((l) => {
-                const color = l.cat?.color ?? view.color
+                const color = rank.get(l.id) ?? windirstatColor(12)
                 return (
                   <tr
                     key={l.id}
                     onClick={() => setCatPick(catPick === l.id ? null : l.id)}
                     className={clsx(
-                      'cursor-default [&>td]:border-r [&>td]:border-line [&>td]:px-2 [&>td]:py-[3px]',
-                      catPick === l.id ? 'bg-accent/25' : 'hover:bg-surface-2',
+                      'cursor-default [&>td]:px-2 [&>td]:py-[2px]',
+                      catPick === l.id ? 'bg-[var(--ds-sel)] text-[var(--ds-sel-ink)]' : 'hover:bg-[var(--ds-hover)]',
                     )}
                     title={`${l.count} movimientos`}
                   >
@@ -192,8 +224,8 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
                     <td>
                       <span className="block h-3.5 w-9 rounded-[2px]" style={cushionSwatch(color)} />
                     </td>
-                    <td className="num text-right">{money(l.value)}</td>
-                    <td className="num text-right text-ink-muted">{total ? ((l.value / total) * 100).toFixed(1).replace('.', ',') : '0'}</td>
+                    <td className="text-right tabular-nums">{money(l.value)}</td>
+                    <td className="text-right tabular-nums">{total ? ((l.value / total) * 100).toFixed(1).replace('.', ',') : '0'}</td>
                   </tr>
                 )
               })}
@@ -213,7 +245,7 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
       />
 
       {/* Barra de estado */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 border-t border-line-strong bg-surface-solid px-3 py-1 text-xs text-ink-muted">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 border-t border-[var(--ds-line-strong)] bg-[var(--ds-face)] px-3 py-1 text-[var(--ds-muted)]">
         <span>Listo</span>
         <span className="min-w-0 flex-1 truncate">
           {selectedNode ? `${selectedNode.label} · ${money(selectedNode.value)} · ${selectedNode.count} mov.` : ''}
@@ -229,6 +261,10 @@ export function DirStatView({ view, onZoom, onOpenMovement }: { view: CityNode; 
 const cushionSwatch = (c: string): CSSProperties => ({
   background: `radial-gradient(ellipse at 35% 35%, rgb(255 255 255 / 0.55) 0%, ${c} 45%, ${withAlpha(c, 0.55)} 100%), ${c}`,
 })
+
+const rgb = ([r, g, b]: [number, number, number], a = 1) => `rgb(${r} ${g} ${b} / ${a})`
+const depthColor = (d: number) => rgb(TREELIST_COLORS[d % TREELIST_COLORS.length])
+const depthTrack = (d: number) => rgb(TREELIST_COLORS[d % TREELIST_COLORS.length], 0.25)
 
 const cssId = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_')
 

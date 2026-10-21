@@ -127,17 +127,88 @@ const hex = (c: string): [number, number, number] => {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
-/** Luz como en WinDirStat: de arriba a la izquierda, algo de ambiente. */
+// ── Colores y luz de WinDirStat (valores por defecto de su código: treemap.cpp y options.cpp) ──
+
+/** Paleta de los cojines, en el orden en que WinDirStat la reparte entre las extensiones (aquí, categorías). */
+export const WINDIRSTAT_PALETTE: [number, number, number][] = [
+  [0, 0, 255],
+  [255, 0, 0],
+  [0, 255, 0],
+  [0, 255, 255],
+  [255, 0, 255],
+  [255, 255, 0],
+  [150, 150, 255],
+  [255, 150, 150],
+  [150, 255, 150],
+  [150, 255, 255],
+  [255, 150, 255],
+  [255, 255, 150],
+  // A partir de la 13.ª, todas iguales (en WinDirStat, el resto de extensiones).
+  [255, 255, 255],
+]
+
+/** Colores por profundidad de la barra «Proporción» del árbol (los cuatro primeros de WinDirStat). */
+export const TREELIST_COLORS: [number, number, number][] = [
+  [64, 64, 140],
+  [140, 64, 64],
+  [64, 140, 64],
+  [140, 140, 64],
+]
+
+const PALETTE_BRIGHTNESS = 0.6
+const AMBIENT = 0.13
+const BRIGHTNESS = 0.88
 const LIGHT = (() => {
   const [x, y, z] = [-1, -1, 10]
   const len = Math.hypot(x, y, z)
   return [x / len, y / len, z / len]
 })()
-const AMBIENT = 0.15
-const BRIGHTNESS = 1.15
+
+/** Si un canal pasa de 255, el exceso se reparte entre los otros dos (NormalizeColor de WinDirStat). */
+export function normalizeColor(r: number, g: number, b: number): [number, number, number] {
+  const first = (a: number, x: number, y: number): [number, number, number] => {
+    const h = (a - 255) / 2
+    a = 255
+    x += h
+    y += h
+    if (x > 255) {
+      y += x - 255
+      x = 255
+    } else if (y > 255) {
+      x += y - 255
+      y = 255
+    }
+    return [a, x, y]
+  }
+  if (r > 255) return first(r, g, b)
+  if (g > 255) {
+    const [gg, rr, bb] = first(g, r, b)
+    return [rr, gg, bb]
+  }
+  if (b > 255) {
+    const [bb, rr, gg] = first(b, r, g)
+    return [rr, gg, bb]
+  }
+  return [r, g, b]
+}
+
+/** Todos los colores de la paleta con el mismo brillo medio (MakeBrightColor de WinDirStat). */
+export function makeBrightColor([r, g, b]: [number, number, number], brightness = PALETTE_BRIGHTNESS): [number, number, number] {
+  const sum = r / 255 + g / 255 + b / 255
+  if (sum <= 0) return [0, 0, 0]
+  const f = (3 * brightness) / sum
+  return normalizeColor(r * f, g * f, b * f).map((c) => Math.min(255, Math.max(0, Math.round(c)))) as [number, number, number]
+}
+
+/** Color de la i-ésima categoría (por importe), ya igualado de brillo, como «#rrggbb». */
+export function windirstatColor(i: number): string {
+  const [r, g, b] = makeBrightColor(WINDIRSTAT_PALETTE[Math.min(i, WINDIRSTAT_PALETTE.length - 1)])
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`
+}
 
 /**
- * Pinta los cojines en un búfer RGBA de `width`×`height` (píxeles ya escalados por `scale`). Sin NaN: los
+ * Pinta los cojines en un búfer RGBA de `width`×`height` (píxeles ya escalados por `scale`), con la fórmula de
+ * WinDirStat: luz ambiente + difusa, por el brillo de la paleta, y el exceso de cada canal repartido. Sin NaN: los
  * rectángulos vacíos se saltan y el coseno se acota antes de usarlo.
  */
 export function renderCushions(
@@ -155,6 +226,7 @@ export function renderCushions(
     px[i + 2] = background[2]
     px[i + 3] = 255
   }
+  const gain = BRIGHTNESS / PALETTE_BRIGHTNESS
   for (const leaf of leaves) {
     const [r, g, b] = hex(colorOf(leaf.node))
     const s = leaf.surface
@@ -171,11 +243,12 @@ export function renderCushions(
         let cos = (nx * LIGHT[0] + ny * LIGHT[1] + LIGHT[2]) / Math.sqrt(nx * nx + ny * ny + 1)
         if (!(cos > 0)) cos = 0
         if (cos > 1) cos = 1
-        const light = (AMBIENT + (1 - AMBIENT) * cos) * BRIGHTNESS
+        const light = ((1 - AMBIENT) * cos + AMBIENT) * gain
+        const [cr, cg, cb] = normalizeColor(r * light, g * light, b * light)
         const o = (iy * width + ix) * 4
-        px[o] = r * light
-        px[o + 1] = g * light
-        px[o + 2] = b * light
+        px[o] = cr
+        px[o + 1] = cg
+        px[o + 2] = cb
       }
     }
   }

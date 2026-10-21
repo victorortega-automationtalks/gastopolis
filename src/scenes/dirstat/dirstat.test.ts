@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CityNode } from '../../model/hierarchy'
-import { cushionLayout, leafAt, renderCushions, squarify } from './layout'
+import { cushionLayout, leafAt, makeBrightColor, normalizeColor, renderCushions, squarify, windirstatColor } from './layout'
 
 const leaf = (id: string, value: number, color = '#3b82f6'): CityNode => ({ id, type: 'movement', label: id, value, count: 1, color })
 const node = (id: string, children: CityNode[]): CityNode => ({
@@ -50,5 +50,17 @@ describe('vista WinDirStat', () => {
     const lum = (x: number) => px[(row * 240 + x) * 4 + 2]
     const xs = Array.from({ length: 20 }, (_, i) => 10 + i * 4).map(lum)
     expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(20)
+  })
+
+  it('colores como WinDirStat: brillo igualado y el exceso de un canal repartido entre los otros', () => {
+    expect(normalizeColor(300, 100, 0)).toEqual([255, 122.5, 22.5])
+    expect(normalizeColor(10, 20, 30)).toEqual([10, 20, 30])
+    // El azul puro de la paleta se aclara hasta el brillo común (0,6), como en WinDirStat.
+    const [r, g, b] = makeBrightColor([0, 0, 255])
+    expect(b).toBe(255)
+    expect(Math.round((r + g + b) / 3)).toBeGreaterThanOrEqual(150)
+    expect(windirstatColor(0)).toMatch(/^#[0-9a-f]{6}$/)
+    // De la 13.ª categoría en adelante, el mismo color.
+    expect(windirstatColor(12)).toBe(windirstatColor(40))
   })
 })

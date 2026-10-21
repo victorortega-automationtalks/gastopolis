@@ -184,7 +184,7 @@ export function CityScreen() {
           </div>
         ) : (
           <div className="min-h-0 flex-1 pb-16 md:pb-0">
-            <DirStatView view={view} onZoom={enter} onOpenMovement={editMovement} />
+            <DirStatView root={root} view={view} onZoom={enter} onOpenMovement={editMovement} />
           </div>
         )}
       </div>

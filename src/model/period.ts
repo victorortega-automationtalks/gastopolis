@@ -29,8 +29,9 @@ export const NEW_DAYS = 7
 
 export const NO_ACCOUNT = '__sin-cuenta__'
 
+/** Por defecto, el mes en curso: es lo que se mira a diario. «Todo» queda a un toque en el selector de periodo. */
 export const DEFAULT_FILTERS: Filters = {
-  period: { preset: 'all' },
+  period: { preset: 'thisMonth' },
   kinds: ['expense', 'income', 'transfer'],
   search: '',
   categoryIds: [],

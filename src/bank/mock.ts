@@ -37,6 +37,9 @@ function transactionsFor(uid: string, from: string, to: string): EbTransaction[]
       if (day === 12) add('luz', 48.3, 'RECIBO IBERDROLA CLIENTES', 'DBIT')
       if (day === 15) add('rev', 200, 'TRANSFERENCIA A REVOLUT', 'DBIT')
       if (day === 20) add('spo', 11.99, 'SPOTIFY', 'DBIT')
+      // Una compra que se devuelve unos días después: deben anularse, no contar como gasto e ingreso.
+      if (day === 10) add('amz', 35.9, 'COMPRA TARJ. 5402XXXXXXXX1234 AMAZON EU SARL', 'DBIT')
+      if (day === 14) add('dev', 35.9, 'DEVOLUCION TARJ. 5402XXXXXXXX1234 AMAZON EU SARL', 'CRDT')
     } else {
       if (day === 15) add('top', 200, 'TOP-UP FROM ES12 •••• 9012', 'CRDT')
       if (day % 5 === 1) add('caf', 3.2, 'CAFETERIA LA PLAZA', 'DBIT')
