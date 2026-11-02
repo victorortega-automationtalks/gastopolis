@@ -6,7 +6,7 @@
 
 ## Convenciones
 
-- **Sencillez ante todo** (la app abrumaba): el menú tiene lo diario arriba (Inicio, Movimientos, Clasificar con su contador, Explorar), Planificar debajo y Configurar discreto al final (`NAV_GROUPS`). Ciudad, Cordillera, Balanza y Río son una sola entrada, «Explorar», con pestañas (`EXPLORE_ROUTES`). El Inicio enseña de entrada solo lo esencial (`DEFAULT_HIDDEN`); el resto, en «Personalizar». Las acciones poco frecuentes van detrás de un modo («Organizar» en Categorías) en vez de en cada fila. Antes de añadir una entrada al menú, una tarjeta al Inicio o un control por fila, piensa qué se quita o se esconde.
+- **Sencillez ante todo** (la app abrumaba): el menú tiene lo diario arriba (Inicio, Movimientos, Clasificar con su contador, Explorar), Planificar debajo y Configurar discreto al final (`NAV_GROUPS`). Ciudad, Cordillera, Balanza y Río son una sola entrada, «Explorar», con pestañas (`EXPLORE_ROUTES`). El Inicio es un resumen: «Este mes» (lo gastado frente a lo normal a esa altura, `usualPace`), «En qué se va», «Últimos meses» y «Para revisar» (solo avisos que piden algo; si no hay, no aparece). Nada más de entrada (`DEFAULT_HIDDEN`); el resto, en «Personalizar». Una tarjeta vacía no ocupa sitio. Las acciones poco frecuentes van detrás de un modo («Organizar» en Categorías) en vez de en cada fila. Antes de añadir una entrada al menú, una tarjeta al Inicio o un control por fila, piensa qué se quita o se esconde.
 
 - **Lógica pura fuera de React** (`src/import`, `src/model`) y con tests. Los componentes solo componen.
 - **Signo de los importes:** gastos negativos, ingresos positivos, transferencias con su signo. Usa `signFor()`; no inventes otra convención.
