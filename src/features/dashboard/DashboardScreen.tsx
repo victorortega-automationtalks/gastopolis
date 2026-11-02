@@ -3,8 +3,10 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  Check,
   ChevronLeft,
   ChevronRight,
+  Gamepad2,
   Eye,
   EyeOff,
   Flame,
@@ -12,15 +14,17 @@ import {
   SlidersHorizontal,
   TriangleAlert,
   Upload,
+  Wallet,
+  type LucideIcon,
 } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
-import { useCategories, useCategoryMap, useGoals, useMovements, useSettings } from '../../data/hooks'
+import { useCategories, useCategoryMap, useGoals, useMovements, useSettings, useUnclassifiedCount } from '../../data/hooks'
 import { withAlpha } from '../../lib/color'
 import { totals } from '../../model/aggregate'
-import { fmtDate, fmtMoney, fmtMonth, fmtPercent, savingsPhrase } from '../../model/format'
+import { fmtDate, fmtMoney, fmtMonth, fmtPercent } from '../../model/format'
 import { buildHierarchy } from '../../model/hierarchy'
 import { GOAL_STATUS_LABEL, goalProgress } from '../../model/goals'
-import { budgetStatus, dataAsOf, monthEndOf, monthProjection, noSpendStreak } from '../../model/insights'
+import { budgetStatus, dataAsOf, monthEndOf, monthProjection, noSpendStreak, usualPace } from '../../model/insights'
 import { LEAK_ICON } from '../../model/leaks'
 import { monthKey, today } from '../../model/period'
 import { CADENCE_LABEL, detectRecurring, upcomingCharges } from '../../model/recurring'
@@ -63,6 +67,7 @@ function useDashboardData(movements: Movement[], month: string, asOf: string) {
     const first = movements.reduce((min, m) => (m.date < min ? m.date : min), month + '-01')
     const window = monthRange([addMonths(month, -11), monthKey(first)].sort()[1], month)
     const flow = monthlyTotals(movements, window)
+    const flow6 = monthlyTotals(movements, monthRange([addMonths(month, -5), monthKey(first)].sort()[1], month))
     const recurring = detectRecurring(
       movements.filter((m) => m.date <= ref),
       ref,
@@ -78,7 +83,9 @@ function useDashboardData(movements: Movement[], month: string, asOf: string) {
       inProgress,
       prevLabel: inProgress ? `vs mismo día de ${fmtMonth(prevKey).split(' ')[0]}` : 'vs mes anterior',
       flow,
+      flow6,
       ref,
+      pace: usualPace(movements, ref),
       ytd,
       top,
       projection: monthProjection(movements, ref),
@@ -86,6 +93,7 @@ function useDashboardData(movements: Movement[], month: string, asOf: string) {
       streak: noSpendStreak(movements, ref),
       recurring: recurring.filter((r) => r.active),
       upcoming: upcomingCharges(recurring, ref, 14),
+      soon: inProgress ? upcomingCharges(recurring, ref, 7) : [],
       priceUps: recurring.filter((r) => r.active && r.priceChanges.some((c) => c.to > c.from)),
       cityLayout: layoutCity(
         buildHierarchy(
@@ -115,6 +123,8 @@ export function DashboardScreen() {
   const [picked, setPicked] = useState<string | null>(null)
   const month = picked && months.includes(picked) ? picked : monthKey(asOf)
   const d = useDashboardData(movements, month, asOf)
+  const goals = useGoals()
+  const review = useReviewItems(d)
   const money = (v: number, o: { signed?: boolean; compact?: boolean } = {}) => fmtMoney(v, { currency: settings.currency, locale: settings.locale, ...o })
 
   if (loading) return null
@@ -122,7 +132,8 @@ export function DashboardScreen() {
 
   const idx = months.indexOf(month)
   const cards: Record<CardId, ReactNode> = {
-    hero: <HeroCard d={d} month={month} money={money} locale={settings.locale} />,
+    hero: <HeroCard d={d} month={month} money={money} />,
+    review: <ReviewCard items={review} />,
     city: <CityCard d={d} month={month} />,
     kpis: <KpiRow d={d} money={money} locale={settings.locale} />,
     flow: <FlowCard d={d} money={money} />,
@@ -138,19 +149,22 @@ export function DashboardScreen() {
   // Ancho de cada tarjeta en la rejilla de 12 columnas (escritorio).
   const span: Record<CardId, string> = {
     hero: 'lg:col-span-5',
+    review: 'lg:col-span-5',
     city: 'lg:col-span-7',
     kpis: 'lg:col-span-12',
-    flow: 'lg:col-span-7',
+    flow: review.length ? 'lg:col-span-7' : 'lg:col-span-12',
     river: 'lg:col-span-12',
-    top: 'lg:col-span-5',
+    top: 'lg:col-span-7',
     budgets: 'lg:col-span-4',
     upcoming: 'lg:col-span-4',
     subscriptions: 'lg:col-span-4',
-    goals: 'lg:col-span-7',
+    goals: 'lg:col-span-12',
     leaks: 'lg:col-span-5',
     streak: 'lg:col-span-12',
   }
-  const visible = dash.order.filter((id) => editing || !dash.hidden.includes(id))
+  // Lo que no tiene nada que contar no ocupa sitio: sin avisos no hay «Para revisar», sin objetivos no hay tarjeta.
+  const empty = (id: CardId) => (id === 'review' && review.length === 0) || (id === 'goals' && !goals.some((g) => !g.archived))
+  const visible = dash.order.filter((id) => (editing || !dash.hidden.includes(id)) && (editing || !empty(id)))
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4">
@@ -191,7 +205,7 @@ export function DashboardScreen() {
               <RotateCcw size={13} /> Restablecer
             </Button>
           )}
-          <Button size="sm" variant={editing ? 'primary' : 'subtle'} onClick={() => setEditing(!editing)}>
+          <Button size="sm" variant={editing ? 'primary' : 'ghost'} onClick={() => setEditing(!editing)} title="Elegir qué tarjetas ves">
             <SlidersHorizontal size={13} /> {editing ? 'Listo' : 'Personalizar'}
           </Button>
         </div>
@@ -227,16 +241,6 @@ export function DashboardScreen() {
           </div>
         ))}
       </div>
-      {!editing && dash.hidden.length > 0 && (
-        <button onClick={() => setEditing(true)} className="mx-auto text-xs text-ink-faint hover:text-ink">
-          {dash.hidden.length === 1 ? 'Una tarjeta más' : `${dash.hidden.length} tarjetas más`} (
-          {dash.hidden
-            .slice(0, 3)
-            .map((id) => CARD_LABEL[id].toLowerCase())
-            .join(', ')}
-          {dash.hidden.length > 3 ? '…' : ''}) en <span className="underline">Personalizar</span>
-        </button>
-      )}
     </div>
   )
 }
@@ -253,53 +257,179 @@ function CardHead({ title, action }: { title: string; action?: ReactNode }) {
   )
 }
 
-function HeroCard({ d, month, money, locale }: { d: Data; month: string; money: MoneyFn; locale: string }) {
-  const rate = d.t.income > 0 ? d.t.net / d.t.income : null
+/** Lo primero que se ve: cuánto llevas gastado y si es más o menos de lo normal, en una frase. */
+function HeroCard({ d, month, money }: { d: Data; month: string; money: MoneyFn }) {
+  const { spent, usual } = d.pace
+  const diff = usual == null ? null : spent - usual
+  const day = +d.ref.slice(8, 10)
+  const days = +monthEndOf(month).slice(8, 10)
+  const calm = diff != null && Math.abs(diff) < Math.max(5, (usual ?? 0) * 0.03)
   return (
-    <Card className="relative h-full overflow-hidden p-6">
-      <div
-        className="absolute -top-20 -right-16 h-56 w-56 rounded-full blur-3xl"
-        style={{ background: d.t.net >= 0 ? 'rgb(52 211 153 / .14)' : 'rgb(251 113 133 / .14)' }}
-      />
-      <div className="relative">
-        <div className="flex items-center gap-2 text-sm text-ink-muted">
-          Balance de {fmtMonth(month, true)}
-          {d.inProgress && (
-            <span className="rounded-full bg-accent-2/15 px-2 py-0.5 text-[11px] font-medium text-accent-2">en curso · día {+d.ref.slice(8, 10)}</span>
-          )}
-        </div>
-        {/* Cifra principal: la única de este tamaño en la vista. */}
-        <div className={clsx('mt-1 text-5xl font-semibold tracking-tight sm:text-6xl', d.t.net >= 0 ? 'text-income' : 'text-expense')}>
-          {money(d.t.net, { signed: true })}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-muted">
-          <span>
-            Entra <b className="font-semibold text-ink">{money(d.t.income)}</b>
-          </span>
-          <span>
-            Sale <b className="font-semibold text-ink">{money(d.t.expense)}</b>
-          </span>
-          {d.t.transfer !== 0 && (
-            <span>
-              {d.t.transfer < 0 ? 'Apartas' : 'Retiras'} <b className="font-semibold text-transfer">{money(Math.abs(d.t.transfer))}</b>
+    <Card className="flex h-full flex-col p-6">
+      <div className="text-sm text-ink-muted">
+        {d.inProgress ? (
+          <>
+            Llevas gastado este mes{' '}
+            <span className="text-ink-faint">
+              · día {day} de {days}
             </span>
+          </>
+        ) : (
+          <>Gastaste en {fmtMonth(month, true)}</>
+        )}
+      </div>
+      {/* Cifra principal: la única de este tamaño en la vista. */}
+      <div className="mt-1 text-5xl font-semibold tracking-tight">{money(spent)}</div>
+      {diff != null && (
+        <div
+          className={clsx(
+            'mt-3 inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium',
+            calm ? 'bg-surface-2 text-ink-muted' : diff < 0 ? 'bg-income/12 text-income' : 'bg-expense/12 text-expense',
+          )}
+        >
+          {calm ? (
+            <>Como sueles {d.inProgress ? 'a estas alturas' : 'al mes'}</>
+          ) : (
+            <>
+              {diff < 0 ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+              {money(Math.abs(diff))} {diff < 0 ? 'menos' : 'más'} de lo normal{d.inProgress ? ` a día ${day}` : ''}
+            </>
           )}
         </div>
-        {rate != null && (
-          <div className="mt-5">
-            <div className="mb-1.5 flex justify-between text-xs text-ink-muted">
-              <span>Tasa de ahorro</span>
-              <span className={clsx('font-medium', rate < 0 ? 'text-expense' : 'text-ink')}>{fmtPercent(rate, locale)}</span>
-            </div>
-            <Meter ratio={Math.max(rate, 0)} label="Tasa de ahorro del mes" />
-          </div>
-        )}
-        <div className="mt-5 border-t border-line pt-3 text-xs text-ink-muted">
-          En {month.slice(0, 4)} llevas{' '}
-          <b className={clsx('font-semibold', d.ytd.net >= 0 ? 'text-income' : 'text-expense')}>{money(d.ytd.net, { signed: true })}</b>
-          {d.ytd.savingsRate != null && <> · {savingsPhrase(d.ytd.savingsRate, locale).toLowerCase()}</>}
+      )}
+      <div className="min-h-5 flex-1" />
+      <div className="grid grid-cols-2 gap-3 border-t border-line pt-4 text-sm">
+        <div>
+          <div className="text-xs text-ink-muted">Ha entrado</div>
+          <div className="font-semibold">{money(d.t.income)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-ink-muted">{d.t.net >= 0 ? (d.inProgress ? 'Te queda' : 'Ahorraste') : 'Te falta'}</div>
+          <div className={clsx('font-semibold', d.t.net >= 0 ? 'text-income' : 'text-expense')}>{money(Math.abs(d.t.net))}</div>
         </div>
       </div>
+      {d.inProgress && d.projection.daysLeft > 0 && (
+        <div className="mt-3 text-xs text-ink-muted">
+          A este ritmo cerrarás el mes en unos <b className="font-semibold text-ink">{money(d.projection.projected, { compact: true })}</b> de gasto.
+        </div>
+      )}
+    </Card>
+  )
+}
+
+interface ReviewItem {
+  id: string
+  icon: LucideIcon
+  text: string
+  detail?: string
+  tone: 'warn' | 'info'
+  onClick?: () => void
+}
+
+/** Avisos que piden hacer algo, uno por línea. Si no hay ninguno, la tarjeta no aparece. */
+function useReviewItems(d: Data): ReviewItem[] {
+  const unclassified = useUnclassifiedCount()
+  const leaks = useLeaks()
+  const navigate = useUI((s) => s.navigate)
+  const settings = useSettings()
+  const money = (v: number) => fmtMoney(v, { currency: settings.currency, locale: settings.locale })
+  const items: ReviewItem[] = []
+  if (unclassified > 0)
+    items.push({
+      id: 'sort',
+      icon: Gamepad2,
+      text: `${unclassified} ${unclassified === 1 ? 'movimiento' : 'movimientos'} sin clasificar`,
+      detail: 'Clasifícalos jugando',
+      tone: 'info',
+      onClick: () => navigate('clasificar'),
+    })
+  const over = d.budgets.filter((b) => b.ratio >= 1)
+  if (over.length)
+    items.push({
+      id: 'budgets',
+      icon: TriangleAlert,
+      text: over.length === 1 ? `Te has pasado del presupuesto de ${over[0].category.name}` : `Te has pasado en ${over.length} presupuestos`,
+      tone: 'warn',
+      onClick: () => navigate('categorias'),
+    })
+  if (d.soon.length) {
+    const total = d.soon.reduce((a, r) => a + r.amount, 0)
+    items.push({
+      id: 'soon',
+      icon: CalendarClock,
+      text: `${money(total)} en cargos fijos esta semana`,
+      detail: d.soon
+        .slice(0, 3)
+        .map((r) => `${r.label} (${+r.nextDate.slice(8, 10)})`)
+        .join(', '),
+      tone: 'info',
+    })
+  }
+  for (const r of d.priceUps.slice(0, 1)) {
+    const c = r.priceChanges[r.priceChanges.length - 1]
+    items.push({
+      id: `up-${r.conceptKey}`,
+      icon: TriangleAlert,
+      text: `${r.label} ha subido de precio`,
+      detail: `${money(c.from)} → ${money(c.to)}`,
+      tone: 'warn',
+    })
+  }
+  if (leaks.open.length)
+    items.push({
+      id: 'leaks',
+      icon: Wallet,
+      text: `${leaks.open.length} ${leaks.open.length === 1 ? 'gasto' : 'gastos'} que podrías recortar`,
+      detail: leaks.openYearly > 0 ? `hasta ${money(leaks.openYearly)} al año` : undefined,
+      tone: 'info',
+      onClick: () => navigate('fugas'),
+    })
+  return items
+}
+
+function ReviewCard({ items }: { items: ReviewItem[] }) {
+  return (
+    <Card className="h-full p-5">
+      <CardHead title="Para revisar" />
+      {items.length === 0 ? (
+        <p className="flex items-center gap-2 text-sm text-ink-muted">
+          <Check size={15} className="text-income" /> Nada pendiente.
+        </p>
+      ) : (
+        <ul className="-mx-2 space-y-0.5">
+          {items.map((it) => {
+            const Icon = it.icon
+            const body = (
+              <>
+                <span
+                  className={clsx(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                    it.tone === 'warn' ? 'bg-warn/12 text-warn' : 'bg-accent/12 text-accent-2',
+                  )}
+                >
+                  <Icon size={15} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm">{it.text}</span>
+                  {it.detail && <span className="block truncate text-xs text-ink-muted">{it.detail}</span>}
+                </span>
+                {it.onClick && <ChevronRight size={15} className="shrink-0 text-ink-faint" />}
+              </>
+            )
+            return (
+              <li key={it.id}>
+                {it.onClick ? (
+                  <button onClick={it.onClick} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-2">
+                    {body}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 px-2 py-2">{body}</div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </Card>
   )
 }
@@ -391,18 +521,17 @@ function FlowCard({ d, money }: { d: Data; money: MoneyFn }) {
   const colors = useSceneColors()
   return (
     <Card className="h-full p-5">
-      <CardHead title="Flujo de los últimos 12 meses" />
+      <CardHead title="Últimos meses" />
       <ColumnChart
-        labels={d.flow.map((f) => fmtMonth(f.month).split(' ')[0])}
+        labels={d.flow6.map((f) => fmtMonth(f.month).split(' ')[0])}
         series={[
-          { id: 'income', label: 'Ingresos', color: colors.income, values: d.flow.map((f) => f.income) },
-          { id: 'expense', label: 'Gastos', color: colors.expense, values: d.flow.map((f) => f.expense) },
-          { id: 'net', label: 'Balance', color: colors.accent2, values: d.flow.map((f) => f.net), line: true },
+          { id: 'income', label: 'Entra', color: colors.income, values: d.flow6.map((f) => f.income) },
+          { id: 'expense', label: 'Sale', color: colors.expense, values: d.flow6.map((f) => f.expense) },
         ]}
-        height={232}
+        height={200}
         format={(v) => money(v, { compact: true })}
-        title={(i) => fmtMonth(d.flow[i].month, true)}
-        ariaLabel="Ingresos, gastos y balance de los últimos 12 meses"
+        title={(i) => fmtMonth(d.flow6[i].month, true)}
+        ariaLabel="Lo que entra y lo que sale en los últimos meses"
       />
     </Card>
   )
@@ -413,7 +542,7 @@ function TopCard({ d, month, money, locale }: { d: Data; month: string; money: M
   const max = Math.max(1e-9, ...d.top.map((r) => r.total))
   return (
     <Card className="h-full p-5">
-      <CardHead title="Dónde se va el dinero" />
+      <CardHead title="En qué se va" />
       {d.top.length === 0 ? (
         <p className="text-sm text-ink-faint">Sin gastos este mes.</p>
       ) : (

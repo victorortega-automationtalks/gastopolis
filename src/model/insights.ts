@@ -91,3 +91,44 @@ export function budgetStatus(movements: Movement[], categories: Category[], toda
     })
     .sort((a, b) => b.ratio - a.ratio)
 }
+
+export interface UsualPace {
+  /** Gastado este mes hasta `today`. */
+  spent: number
+  /** Media de lo gastado en los meses anteriores hasta el mismo día (null si no hay meses con que comparar). */
+  usual: number | null
+  /** Cuántos meses entran en la media. */
+  months: number
+}
+
+/**
+ * ¿Gastas más o menos que de costumbre? Lo de este mes hasta hoy frente a la media de los `months` meses anteriores
+ * hasta el mismo día (el 31 cuenta como el último día de los meses cortos). Solo meses con algún movimiento.
+ */
+export function usualPace(movements: Pick<Movement, 'date' | 'amount' | 'kind'>[], today: ISODate, months = 3): UsualPace {
+  const day = +today.slice(8, 10)
+  const [y, m] = today.split('-').map(Number)
+  const keys = Array.from({ length: months }, (_, i) => {
+    const d = new Date(Date.UTC(y, m - 2 - i, 1))
+    return d.toISOString().slice(0, 7)
+  })
+  const spentIn = new Map(keys.map((k) => [k, 0]))
+  const active = new Set<string>()
+  const cur = today.slice(0, 7)
+  let spent = 0
+  for (const mv of movements) {
+    const k = mv.date.slice(0, 7)
+    if (k === cur) {
+      if (mv.kind === 'expense' && mv.date <= today) spent -= mv.amount
+      continue
+    }
+    if (!spentIn.has(k)) continue
+    active.add(k)
+    if (mv.kind === 'expense' && +mv.date.slice(8, 10) <= day) spentIn.set(k, spentIn.get(k)! - mv.amount)
+  }
+  const used = keys.filter((k) => active.has(k))
+  const usual = used.length ? used.reduce((a, k) => a + spentIn.get(k)!, 0) / used.length : null
+  return { spent: round2(spent), usual: usual == null ? null : round2(usual), months: used.length }
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100

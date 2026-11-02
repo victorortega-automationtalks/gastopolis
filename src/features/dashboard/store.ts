@@ -1,15 +1,16 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-export type CardId = 'hero' | 'city' | 'kpis' | 'flow' | 'river' | 'top' | 'goals' | 'leaks' | 'budgets' | 'upcoming' | 'subscriptions' | 'streak'
+export type CardId = 'hero' | 'review' | 'city' | 'kpis' | 'flow' | 'river' | 'top' | 'goals' | 'leaks' | 'budgets' | 'upcoming' | 'subscriptions' | 'streak'
 
 export const CARD_LABEL: Record<CardId, string> = {
-  hero: 'Balance del mes',
+  hero: 'Este mes',
+  review: 'Para revisar',
   city: 'Mini-ciudad',
   kpis: 'Indicadores',
-  flow: 'Flujo mensual',
+  flow: 'Últimos meses',
   river: 'Río del mes',
-  top: 'Dónde se va el dinero',
+  top: 'En qué se va',
   goals: 'Objetivos',
   leaks: 'Fugas',
   budgets: 'Presupuestos',
@@ -18,10 +19,27 @@ export const CARD_LABEL: Record<CardId, string> = {
   streak: 'Racha y ritmo',
 }
 
-export const DEFAULT_ORDER: CardId[] = ['hero', 'city', 'kpis', 'flow', 'top', 'river', 'goals', 'leaks', 'budgets', 'upcoming', 'subscriptions', 'streak']
+export const DEFAULT_ORDER: CardId[] = [
+  'hero',
+  'top',
+  'flow',
+  'review',
+  'goals',
+  'city',
+  'kpis',
+  'river',
+  'leaks',
+  'budgets',
+  'upcoming',
+  'subscriptions',
+  'streak',
+]
 
-/** Para no abrumar, de entrada solo lo esencial; el resto se enseña desde «Personalizar». */
-export const DEFAULT_HIDDEN: CardId[] = ['kpis', 'river', 'budgets', 'upcoming', 'subscriptions', 'streak']
+/**
+ * Para no abrumar, de entrada solo el resumen: cuánto llevas, en qué, cómo van los meses y lo que pide atención
+ * («Para revisar» ya avisa de fugas, cargos y presupuestos). El resto se enseña desde «Personalizar».
+ */
+export const DEFAULT_HIDDEN: CardId[] = ['city', 'kpis', 'river', 'leaks', 'budgets', 'upcoming', 'subscriptions', 'streak']
 
 interface DashboardPrefs {
   order: CardId[]
@@ -52,10 +70,11 @@ export const useDashboard = create<DashboardPrefs>()(
       name: 'gastopolis.dashboard',
       // v1: Inicio simplificado. A quien venía de antes se le ocultan también las tarjetas secundarias (se recuperan en
       // «Personalizar»).
-      version: 1,
+      // v2: Inicio como resumen. Se vuelve al orden y las tarjetas por defecto (lo demás sigue en «Personalizar»).
+      version: 2,
       migrate: (saved, version) => {
         const s = saved as Partial<DashboardPrefs>
-        return version < 1 ? { ...s, hidden: [...new Set([...(s.hidden ?? []), ...DEFAULT_HIDDEN])] } : s
+        return version < 2 ? { ...s, order: DEFAULT_ORDER, hidden: DEFAULT_HIDDEN } : s
       },
       storage: createJSONStorage(() => localStorage),
       partialize: ({ order, hidden }) => ({ order, hidden }),
